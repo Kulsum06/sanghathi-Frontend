@@ -38,7 +38,7 @@ const Login = () => {
   const [isAdminDemoChecked, setIsAdminDemoChecked] = useState(false);
   const [isFacultyDemoChecked, setIsFacultyDemoChecked] = useState(false);
   const [isStudentDemoChecked, setIsStudentDemoChecked] = useState(false);
-
+  const [isDirectorDemoChecked, setIsDirectorDemoChecked] = useState(false);
   const handleAdminDemoChange = (event) => {
     setIsAdminDemoChecked(event.target.checked);
     if (event.target.checked) {
@@ -49,7 +49,16 @@ const Login = () => {
       password.current.value = "";
     }
   };
-
+  const handleDirectorDemoChange = (event) => {
+    setIsDirectorDemoChecked(event.target.checked);
+    if (event.target.checked) {
+      setIsStudentDemoChecked(false);
+      setIsFacultyDemoChecked(false);
+    } else {
+      email.current.value = "";
+      password.current.value = "";
+    }
+  };
   const handleFacultyDemoChange = (event) => {
     setIsFacultyDemoChecked(event.target.checked);
     if (event.target.checked) {

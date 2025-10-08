@@ -39,6 +39,33 @@ const adminNavConfig = [
   { text: "Settings", icon: <SettingsOutlinedIcon />, link: "/settings" },
 ];
 
+const directorNavConfig = [
+  {
+    text: "Home",
+    icon: <HomeOutlinedIcon />,
+    link: "/director/dashboard",
+  },
+  { text: "View Users", 
+    icon: <PeopleOutlinedIcon />, 
+    link: "/director/users" },
+  { text: "Reports", icon: <SummarizeOutlinedIcon />, link: "/report" },
+  { text: "Settings", icon: <SettingsOutlinedIcon />, link: "/settings" },
+];
+const hodNavConfig = [
+  {
+    text: "Home",
+    icon: <HomeOutlinedIcon />,
+    link: "/hod/dashboard",
+  },
+  { text: "View Users", 
+    icon: <PeopleOutlinedIcon />, 
+    link: "/hod/users" },
+  { text: "Reports", icon: <SummarizeOutlinedIcon />, link: "/report" },
+  { text: "Settings", icon: <SettingsOutlinedIcon />, link: "/settings" },
+];
+
+
+
 const facultyNavConfig = [
   { text: "Home", icon: <HomeOutlinedIcon />, link: "/faculty/dashboard" },
   { text: "My Mentees", icon: <PeopleIcon />, link: "/mentees" },
@@ -60,12 +87,16 @@ const studentNavConfig = [
 const getNavConfig = (role) => {
   console.log("ROLE", role);
   switch (role) {
+    case "director":
+      return directorNavConfig;
     case "admin":
       return adminNavConfig;
     case "faculty":
       return facultyNavConfig;
     case "student":
       return studentNavConfig;
+    case "hod":
+      return hodNavConfig;
     default:
       return [];
   }

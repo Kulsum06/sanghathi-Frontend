@@ -26,6 +26,8 @@ import Thread from "./pages/Thread/Thread";
 import ThreadWindow from "./pages/Thread/ThreadWindow";
 import Report from "./pages/Report/Report";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
+import DirectorDashboard from "./pages/DIrector/DirectorDashboard";
+import HodDashboard from "./pages/Hod/HodDashboard";
 import ViewUsers from "./pages/Admin/ViewUsers";
 import Data from "./pages/Admin/Data";
 import FacultyDashboard from "./pages/Faculty/FacultyDashboard";
@@ -48,6 +50,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword   from "./pages/ResetPassword";
 import FeedbackForm from "./pages/Feedback/feedback";
 
+import FeedbackTable from "./pages/Feedback/feedbackpage";
 // TODO : Need to remove routing logic from app component
 function App() {
   // Track page views on route change using Google Analytics GA4
@@ -93,7 +96,9 @@ function App() {
                           <Navigate replace to="/faculty/dashboard" />
                         ) : user.roleName === "admin" ? (
                           <Navigate replace to="/admin/dashboard" />
-                        ) : (
+                        ) : user.roleName === "director" ? (
+                          <Navigate replace to="/director/dashboard" />
+                        ): (
                           <ProtectedRouteWrapper allowedRoles={["student"]}>
                             <LazyLoadWrapper component={Dashboard} />
                           </ProtectedRouteWrapper>
@@ -129,6 +134,22 @@ function App() {
                     }
                   />
                   <Route
+                    path="/director/dashboard"
+                    element={
+                      <ProtectedRouteWrapper allowedRoles={["director"]}>
+                        <LazyLoadWrapper component={DirectorDashboard} />
+                      </ProtectedRouteWrapper>
+                    }
+                  />
+                  <Route
+                    path="/hod/dashboard"
+                    element={
+                      <ProtectedRouteWrapper allowedRoles={["hod"]}>
+                        <LazyLoadWrapper component={HodDashboard} />
+                      </ProtectedRouteWrapper>
+                    }
+                  />
+                  <Route
                     path="/admin/add-user"
                     element={
                       <ProtectedRouteWrapper>
@@ -138,6 +159,14 @@ function App() {
                   />
                   <Route
                     path="/admin/users"
+                    element={
+                      <ProtectedRouteWrapper>
+                        <LazyLoadWrapper component={ViewUsers} />
+                      </ProtectedRouteWrapper>
+                    }
+                  />
+                  <Route
+                    path="/director/users"
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={ViewUsers} />
@@ -344,6 +373,14 @@ function App() {
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={FeedbackForm} />
+                      </ProtectedRouteWrapper>
+                    }
+                  />
+                  <Route
+                    path="/feedbackpage"
+                    element={
+                      <ProtectedRouteWrapper>
+                        <LazyLoadWrapper component={FeedbackTable} />
                       </ProtectedRouteWrapper>
                     }
                   />
