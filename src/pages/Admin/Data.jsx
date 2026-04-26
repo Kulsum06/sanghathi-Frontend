@@ -1,20 +1,23 @@
 import { capitalCase } from "change-case";
 import { useState } from "react";
 // @mui
-import { 
-  Container, 
-  Tab, 
-  Box, 
-  Tabs, 
+import {
+  Container,
+  Tab,
+  Box,
+  Tabs,
   Paper,
-  Typography 
+  Typography
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 
+
 // routes
+
 
 // hooks
 import useTabs from "../../hooks/useTabs";
+
 
 // components
 import Page from "../../components/Page";
@@ -22,13 +25,19 @@ import Iconify from "../../components/Iconify";
 import HeaderBreadcrumbs from "../../components/HeaderBreadcrumbs";
 // sections
 
+
 import AddIat from "./AddIat";
 import AddAttendance from "./AddAttendance";
 import AddStudents from "./AddStudents";
 import AddMarks from "../Scorecard/AddMarks";
+import AddMiniProjectDetails from "./AddMiniProjectDetails";
+import AddMoocDetails from "./AddMoocDetails";
+import AddTylMarks from "./AddTylMarks";
 import React from "react";
 
+
 // ----------------------------------------------------------------------
+
 
 export default function Data() {
   const theme = useTheme();
@@ -36,8 +45,10 @@ export default function Data() {
   const [editingUser, setEditingUser] = useState(null);
   const { currentTab, onChangeTab } = useTabs("Add Users");
 
+
   // Get the color based on the current theme mode
   const activeColor = isLight ? theme.palette.primary.main : theme.palette.info.main;
+
 
   const ACCOUNT_TABS = [
     {
@@ -74,7 +85,23 @@ export default function Data() {
         />
       ),
     },
+    {
+      value: "Add Mini Projects",
+      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+      component: <AddMiniProjectDetails />,
+    },
+    {
+      value: "Add MOOC Details",
+      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+      component: <AddMoocDetails />,
+    },
+    {
+      value: "Add TYL Marks",
+      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+      component: <AddTylMarks />,
+    },
   ];
+
 
   return (
     <Page title="User: Account Settings">
@@ -85,7 +112,7 @@ export default function Data() {
             p: 3,
             mb: 4,
             borderRadius: 2,
-            backgroundColor: isLight 
+            backgroundColor: isLight
               ? 'rgba(255, 255, 255, 0.8)'
               : alpha(theme.palette.background.paper, 0.8),
             backdropFilter: 'blur(8px)',
@@ -94,17 +121,17 @@ export default function Data() {
               : '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
           }}
         >
-          <Box 
-            sx={{ 
+          <Box
+            sx={{
               textAlign: 'center',
               mb: 3
             }}
           >
-            <Typography 
+            <Typography
               variant="h4"
               sx={{
                 fontWeight: 'bold',
-                background: isLight 
+                background: isLight
                   ? `-webkit-linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
                   : `-webkit-linear-gradient(45deg, ${theme.palette.info.main}, ${theme.palette.info.dark})`,
                 WebkitBackgroundClip: 'text',
@@ -114,15 +141,16 @@ export default function Data() {
             >
               Data Management
             </Typography>
-            
-            <Typography 
-              variant="body1" 
+
+            <Typography
+              variant="body1"
               color="text.secondary"
               sx={{ maxWidth: 600, mx: 'auto' }}
             >
               Upload and manage data for students, attendance, and academic records
             </Typography>
           </Box>
+
 
           <Tabs
             allowScrollButtonsMobile
@@ -171,6 +199,7 @@ export default function Data() {
           </Tabs>
         </Paper>
 
+
         {ACCOUNT_TABS.map((tab) => {
           const isMatched = tab.value === currentTab;
           return isMatched && <Box key={tab.value}>{tab.component}</Box>;
@@ -179,3 +208,5 @@ export default function Data() {
     </Page>
   );
 }
+
+

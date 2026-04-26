@@ -7,6 +7,7 @@ import { FormProvider, RHFTextField } from "../../components/hook-form";
 import { AuthContext } from "../../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import api from "../../utils/axios";
+import useApiCache from "../../hooks/useApiCache";
 
 const DEFAULT_VALUES = {
   firstName: "",
@@ -27,61 +28,46 @@ export default function LocalGuardianForm() {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
-  const menteeId = searchParams.get('menteeId');
-  const [isDataFetched, setIsDataFetched] = useState(false);
+  const menteeId = searchParams.get("menteeId");
+  const userId = menteeId || user?._id;
 
-  const methods = useForm({
-    defaultValues: DEFAULT_VALUES,
-  });
-
+  const methods = useForm({ defaultValues: DEFAULT_VALUES });
   const { handleSubmit, reset, formState: { isSubmitting } } = methods;
 
+  const { data, loading, error, invalidate } = useApiCache(
+    userId ? `/v1/local-guardians/${userId}` : null
+  );
+
+  // Populate form when cached/fresh data arrives
   useEffect(() => {
-    const fetchLocalGuardian = async () => {
-      try {
-        const userId = menteeId || user?._id;
-        if (!userId) return;
-
-        const response = await api.get(`/v1/local-guardians/${userId}`);
-        
-        // Handle both success cases - with and without data
-        if (response.data.status === 'success') {
-          if (response.data.data?.localGuardian) {
-            // Data exists - populate form
-            reset(response.data.data.localGuardian);
-          } else {
-            // No data found - reset to defaults
-            reset(DEFAULT_VALUES);
-          }
-        }
-      } catch (error) {
-        if (error.response?.status === 404) {
-          // 404 is expected for new users without data
-          reset(DEFAULT_VALUES);
-        } else {
-          enqueueSnackbar("Error fetching guardian details", { variant: "error" });
-        }
-      } finally {
-        setIsDataFetched(true);
+    if (data !== undefined) {
+      if (data?.data?.localGuardian) {
+        reset(data.data.localGuardian);
+      } else {
+        reset(DEFAULT_VALUES);
       }
-    };
+    }
+  }, [data, reset]);
 
-    fetchLocalGuardian();
-  }, [menteeId, user, reset, enqueueSnackbar]);
+  // Show error snackbar for non-404 errors
+  useEffect(() => {
+    if (error) {
+      enqueueSnackbar("Error fetching guardian details", { variant: "error" });
+    }
+  }, [error, enqueueSnackbar]);
 
-  const onSubmit = async (data) => {
+  const onSubmit = async (formData) => {
     try {
-      const userId = menteeId || user?._id;
       if (!userId) {
         enqueueSnackbar("User ID is required", { variant: "error" });
         return;
       }
-
-      await api.post("/v1/local-guardians", { ...data, userId });
+      await api.post("/v1/local-guardians", { ...formData, userId });
       enqueueSnackbar("Guardian details saved successfully!", { variant: "success" });
-    } catch (error) {
+      invalidate(); // refresh cache after save
+    } catch (err) {
       enqueueSnackbar(
-        error.response?.data?.message || "Error saving guardian details", 
+        err.response?.data?.message || "Error saving guardian details",
         { variant: "error" }
       );
     }
@@ -92,9 +78,9 @@ export default function LocalGuardianForm() {
       <Card sx={{ p: 3 }}>
         <Typography variant="h5" gutterBottom>Local Guardian Details</Typography>
         <Divider sx={{ mb: 3 }} />
-        
-        {!isDataFetched ? (
-          <Box sx={{ textAlign: 'center', py: 3 }}>
+
+        {loading ? (
+          <Box sx={{ textAlign: "center", py: 3 }}>
             <Typography>Loading guardian details...</Typography>
           </Box>
         ) : (
@@ -102,12 +88,12 @@ export default function LocalGuardianForm() {
             <Grid container spacing={2}>
               {Object.keys(DEFAULT_VALUES).map((field) => (
                 <Grid item xs={12} md={field === "residenceAddress" ? 12 : 4} key={field}>
-                  <RHFTextField 
-                    name={field} 
-                    label={field.split(/(?=[A-Z])/).join(' ')} 
-                    fullWidth 
-                    multiline={field === "residenceAddress"} 
-                    rows={field === "residenceAddress" ? 4 : 1} 
+                  <RHFTextField
+                    name={field}
+                    label={field.split(/(?=[A-Z])/).join(" ")}
+                    fullWidth
+                    multiline={field === "residenceAddress"}
+                    rows={field === "residenceAddress" ? 4 : 1}
                   />
                 </Grid>
               ))}
@@ -115,18 +101,14 @@ export default function LocalGuardianForm() {
 
             <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
               <Box display="flex" gap={1}>
-                <LoadingButton 
-                  variant="outlined" 
-                  onClick={() => reset(DEFAULT_VALUES)} 
+                <LoadingButton
+                  variant="outlined"
+                  onClick={() => reset(DEFAULT_VALUES)}
                   disabled={isSubmitting}
                 >
                   Reset
                 </LoadingButton>
-                <LoadingButton 
-                  type="submit" 
-                  variant="contained" 
-                  loading={isSubmitting}
-                >
+                <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
                   Save
                 </LoadingButton>
               </Box>

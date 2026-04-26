@@ -1,5 +1,6 @@
 import { createContext, useEffect, useReducer } from "react";
 import AuthReducer from "./AuthReducer";
+import { clearAllCache } from "../hooks/useApiCache";
 
 const INITIAL_STATE = {
   user: JSON.parse(localStorage.getItem("user")) || null,
@@ -14,6 +15,10 @@ export const AuthContextProvider = ({ children }) => {
 
   useEffect(() => {
     localStorage.setItem("user", JSON.stringify(state.user));
+    if (!state.user) {
+      // User logged out — clear all cached API responses
+      clearAllCache();
+    }
   }, [state.user]);
 
   return (

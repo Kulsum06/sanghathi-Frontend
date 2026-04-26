@@ -1,27 +1,14 @@
-import React, { useEffect, useState, useCallback, useContext } from "react";
+import React, { useEffect, useContext } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm, useFieldArray } from "react-hook-form";
 import { AuthContext } from "../../context/AuthContext";
-import {
-  Box,
-  Grid,
-  Card,
-  Stack,
-  Button,
-  IconButton,
-  Typography,
-  TextField,
-  useTheme,
-} from "@mui/material";
+import { Box, Grid, Card, Stack, Button, IconButton, Typography, TextField, useTheme } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { Delete as DeleteIcon } from "@mui/icons-material";
-import {
-  FormProvider,
-  RHFTextField,
-  RHFSelect,
-} from "../../components/hook-form";
+import { FormProvider, RHFTextField, RHFSelect } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
+import useApiCache from "../../hooks/useApiCache";
 
 const placementType = [
   { label: "In-Campus", value: "In-Campus" },
@@ -29,7 +16,6 @@ const placementType = [
   { label: "Pool", value: "Pool" },
 ];
 
-// Default empty placement with required fields filled
 const DEFAULT_EMPTY_PLACEMENT = {
   companyName: "",
   placedSemester: "",
@@ -44,147 +30,73 @@ export default function PlacementDetails() {
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const menteeId = searchParams.get("menteeId");
+  const userId = menteeId || user?._id;
   const theme = useTheme();
   const isLight = theme.palette.mode === "light";
 
-  const methods = useForm({
-    defaultValues: {
-      placements: [{ ...DEFAULT_EMPTY_PLACEMENT }],
-    },
-  });
+  const methods = useForm({ defaultValues: { placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] } });
+  const { handleSubmit, reset, formState: { isSubmitting, errors } } = methods;
+  const { fields, append, remove } = useFieldArray({ control: methods.control, name: "placements" });
 
-  const {
-    handleSubmit,
-    reset,
-    formState: { isSubmitting, errors },
-  } = methods;
-  const { fields, append, remove } = useFieldArray({
-    control: methods.control,
-    name: "placements",
-  });
+  const { data, loading, error, invalidate } = useApiCache(
+    userId ? `/placement/placements/${userId}` : null
+  );
 
-  // Show form errors if any
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
-      console.error("Form errors:", errors);
       enqueueSnackbar("Please fill all required fields", { variant: "error" });
     }
   }, [errors, enqueueSnackbar]);
 
-  const fetchPlacements = useCallback(async () => {
-    try {
-      let response;
-      if (menteeId) {
-        response = await api.get(`/placement/placements/${menteeId}`);
-      } else {
-        response = await api.get(`/placement/placements/${user._id}`);
-      }
-
-      const { data } = response.data;
-
-      if (data && Array.isArray(data)) {
-        const formattedPlacements = data.map((placement) => ({
-          ...placement,
-          dateOfSelection: placement.dateOfSelection
-            ? new Date(placement.dateOfSelection).toISOString().split("T")[0]
+  useEffect(() => {
+    if (data !== undefined) {
+      const list = data?.data;
+      if (Array.isArray(list) && list.length > 0) {
+        const formatted = list.map((p) => ({
+          ...p,
+          dateOfSelection: p.dateOfSelection
+            ? new Date(p.dateOfSelection).toISOString().split("T")[0]
             : new Date().toISOString().split("T")[0],
         }));
-
-        // If we have data, use it; otherwise use the default empty placement
-        reset({
-          placements:
-            formattedPlacements.length > 0
-              ? formattedPlacements
-              : [{ ...DEFAULT_EMPTY_PLACEMENT }],
-        });
+        reset({ placements: formatted });
       } else {
-        console.warn("No placement data found for this user");
         reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] });
       }
-    } catch (error) {
-      console.error("Error fetching placement data:", error);
-      enqueueSnackbar("Failed to fetch placement data", { variant: "error" });
-      // If there's an error, still give a usable form
-      reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] });
     }
-  }, [user?._id, menteeId, reset, enqueueSnackbar]);
+  }, [data, reset]);
 
   useEffect(() => {
-    if (user?._id || menteeId) {
-      fetchPlacements();
+    if (error) {
+      enqueueSnackbar("Failed to fetch placement data", { variant: "error" });
+      reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] });
     }
-  }, [fetchPlacements, user?._id, menteeId]);
-
-  const handleReset = () => {
-    reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] });
-  };
+  }, [error, enqueueSnackbar, reset]);
 
   const validatePlacements = (formData) => {
-    // Check if all required fields are filled
     const isValid = formData.placements.every(
-      (placement) =>
-        placement.companyName &&
-        placement.placedSemester &&
-        placement.dateOfSelection &&
-        placement.type &&
-        placement.packageSalary
+      (p) => p.companyName && p.placedSemester && p.dateOfSelection && p.type && p.packageSalary
     );
-
-    if (!isValid) {
-      enqueueSnackbar("Please fill all required fields for each placement", {
-        variant: "error",
-      });
-    }
-
+    if (!isValid) enqueueSnackbar("Please fill all required fields for each placement", { variant: "error" });
     return isValid;
   };
 
-  const onSubmit = useCallback(
-    async (formData) => {
-      try {
-        if (!user || !user._id) {
-          enqueueSnackbar("User information not available", {
-            variant: "error",
-          });
-          return;
-        }
-
-        // Validate the data before submission
-        if (!validatePlacements(formData)) {
-          return;
-        }
-
-        await api.post("/placement", {
-          placements: formData.placements,
-          userId: menteeId || user._id,
-        });
-
-        enqueueSnackbar("Placement details saved successfully!", {
-          variant: "success",
-        });
-        await fetchPlacements();
-      } catch (error) {
-        console.error(error);
-        enqueueSnackbar(
-          error.message || "An error occurred while processing the request",
-          {
-            variant: "error",
-          }
-        );
-      }
-    },
-    [enqueueSnackbar, fetchPlacements, user, menteeId, validatePlacements]
-  );
+  const onSubmit = async (formData) => {
+    try {
+      if (!user?._id) { enqueueSnackbar("User information not available", { variant: "error" }); return; }
+      if (!validatePlacements(formData)) return;
+      await api.post("/placement", { placements: formData.placements, userId: menteeId || user._id });
+      enqueueSnackbar("Placement details saved successfully!", { variant: "success" });
+      invalidate();
+    } catch (err) {
+      enqueueSnackbar(err.message || "An error occurred while processing the request", { variant: "error" });
+    }
+  };
 
   return (
     <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
       <Card sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Placement Details
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Fields marked with * are required
-        </Typography>
+        <Typography variant="h6" gutterBottom>Placement Details</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Fields marked with * are required</Typography>
 
         <Grid container spacing={2}>
           {fields.map((item, index) => (
@@ -193,81 +105,32 @@ export default function PlacementDetails() {
                 <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={11}>
-                      <Typography variant="subtitle1" gutterBottom>
-                        Company - {index + 1}
-                      </Typography>
+                      <Typography variant="subtitle1" gutterBottom>Company - {index + 1}</Typography>
                     </Grid>
                     <Grid item xs={1} sx={{ textAlign: "right" }}>
                       {fields.length > 1 && (
-                        <IconButton color="error" onClick={() => remove(index)}>
-                          <DeleteIcon />
-                        </IconButton>
+                        <IconButton color="error" onClick={() => remove(index)}><DeleteIcon /></IconButton>
                       )}
                     </Grid>
-
                     <Grid item xs={12} md={6}>
-                      <RHFTextField
-                        name={`placements[${index}].companyName`}
-                        label="Company Name"
-                        fullWidth
-                        required
-                      />
+                      <RHFTextField name={`placements[${index}].companyName`} label="Company Name" fullWidth required />
                     </Grid>
-
                     <Grid item xs={12} md={6}>
-                      <RHFTextField
-                        name={`placements[${index}].placedSemester`}
-                        label="Placed Semester"
-                        fullWidth
-                        autoComplete="off"
-                        required
-                      />
+                      <RHFTextField name={`placements[${index}].placedSemester`} label="Placed Semester" fullWidth required />
                     </Grid>
-
                     <Grid item xs={12} md={6}>
-                      <RHFTextField
-                        name={`placements[${index}].dateOfSelection`}
-                        label="Date of Selection"
-                        type="date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        required
-                      />
+                      <RHFTextField name={`placements[${index}].dateOfSelection`} label="Date of Selection" type="date" fullWidth InputLabelProps={{ shrink: true }} required />
                     </Grid>
-
                     <Grid item xs={12} md={6}>
-                      <RHFSelect
-                        name={`placements[${index}].type`}
-                        label="Type"
-                        fullWidth
-                        required
-                      >
-                        {placementType.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
+                      <RHFSelect name={`placements[${index}].type`} label="Type" fullWidth required>
+                        {placementType.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </RHFSelect>
                     </Grid>
-
                     <Grid item xs={12} md={6}>
-                      <RHFTextField
-                        name={`placements[${index}].packageSalary`}
-                        label="Package/Salary"
-                        fullWidth
-                        required
-                      />
+                      <RHFTextField name={`placements[${index}].packageSalary`} label="Package/Salary" fullWidth required />
                     </Grid>
-
                     <Grid item xs={12} md={6}>
-                      <RHFTextField
-                        name={`placements[${index}].viewsToShare`}
-                        label="Views to Share"
-                        multiline
-                        rows={3}
-                        fullWidth
-                        autoComplete="off"
-                      />
+                      <RHFTextField name={`placements[${index}].viewsToShare`} label="Views to Share" multiline rows={3} fullWidth />
                     </Grid>
                   </Grid>
                 </Card>
@@ -276,34 +139,15 @@ export default function PlacementDetails() {
           ))}
 
           <Grid item xs={12}>
-            <Button
-              variant="contained"
-              color={isLight ? "primary" : "info"}
-              onClick={() => append({ ...DEFAULT_EMPTY_PLACEMENT })}
-              sx={{ mt: 2, display: "block", mx: "auto" }}
-            >
+            <Button variant="contained" color={isLight ? "primary" : "info"} onClick={() => append({ ...DEFAULT_EMPTY_PLACEMENT })} sx={{ mt: 2, display: "block", mx: "auto" }}>
               Add Company
             </Button>
           </Grid>
-
           <Grid item xs={12}>
             <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
               <Box display="flex" gap={1}>
-                <LoadingButton
-                  variant="outlined"
-                  color={isLight ? "primary" : "info"}
-                  onClick={handleReset}
-                >
-                  Reset
-                </LoadingButton>
-                <LoadingButton
-                  type="submit"
-                  variant="contained"
-                  color={isLight ? "primary" : "info"}
-                  loading={isSubmitting}
-                >
-                  Save
-                </LoadingButton>
+                <LoadingButton variant="outlined" color={isLight ? "primary" : "info"} onClick={() => reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] })}>Reset</LoadingButton>
+                <LoadingButton type="submit" variant="contained" color={isLight ? "primary" : "info"} loading={isSubmitting || loading}>Save</LoadingButton>
               </Box>
             </Stack>
           </Grid>

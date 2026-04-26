@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
@@ -6,10 +6,8 @@ import { useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { Box, Grid, Card, Stack, Typography, Divider } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
-import {
-  FormProvider,
-  RHFTextField,
-} from "../../components/hook-form";
+import { FormProvider, RHFTextField } from "../../components/hook-form";
+import useApiCache from "../../hooks/useApiCache";
 
 const DEFAULT_VALUES = {
   fatherFirstName: "",
@@ -38,87 +36,52 @@ export default function ParentsDetails() {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
-  const menteeId = searchParams.get('menteeId');
-  const [isDataFetched, setIsDataFetched] = useState(false);
+  const menteeId = searchParams.get("menteeId");
+  const userId = menteeId || user?._id;
 
-  const methods = useForm({
-    defaultValues: DEFAULT_VALUES,
-  });
+  const methods = useForm({ defaultValues: DEFAULT_VALUES });
+  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
 
-  const {
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = methods;
+  const { data, loading, error, invalidate } = useApiCache(
+    userId ? `/parent-details/${userId}` : null
+  );
 
-  const fetchParentDetails = useCallback(async () => {
-    try {
-      const userId = menteeId || user?._id;
-      if (!userId) {
-        console.error('No userId available for fetching data');
-        return;
-      }
-      
-      const response = await api.get(`/parent-details/${userId}`);
-      console.log("Full API response:", response);
-      
-      let parentDetails = null;
-      
-      if (response.data?.data?.parentDetails) {
-        parentDetails = response.data.data.parentDetails;
-        console.log("Found parent details:", parentDetails);
-      } else {
-        console.log("No parent details found or different response structure");
-        return;
-      }
-      
+  // Populate form when data loads
+  useEffect(() => {
+    if (data !== undefined) {
+      const parentDetails = data?.data?.parentDetails;
       if (parentDetails) {
         const formData = {};
-        Object.keys(DEFAULT_VALUES).forEach(key => {
+        Object.keys(DEFAULT_VALUES).forEach((key) => {
           formData[key] = parentDetails[key] || "";
         });
-        
-        console.log("Setting form data:", formData);
         reset(formData);
+      } else {
+        reset(DEFAULT_VALUES);
       }
-    } catch (error) {
-      console.error("Error fetching parent details:", error);
-      if (error.response?.status !== 404) {
-        enqueueSnackbar("Error fetching parent details", { variant: "error" });
-      }
-    } finally {
-      setIsDataFetched(true);
     }
-  }, [user?._id, menteeId, reset, enqueueSnackbar]);
+  }, [data, reset]);
 
   useEffect(() => {
-    fetchParentDetails();
-  }, [fetchParentDetails]);
+    if (error) {
+      enqueueSnackbar("Error fetching parent details", { variant: "error" });
+    }
+  }, [error, enqueueSnackbar]);
 
   const onSubmit = async (formData) => {
     try {
-      const userId = menteeId || user?._id;
       if (!userId) {
         enqueueSnackbar("User ID is required", { variant: "error" });
         return;
       }
-      
-      console.log("Form data:", formData);
-      const requestData = {
-        ...formData,
-        userId,
-      };
-      
-      console.log("Sending data with userId:", requestData);
-      const response = await api.post("/parent-details", requestData);
-      
-      enqueueSnackbar("Parent details saved successfully!", {
-        variant: "success",
-      });
-    } catch (error) {
-      console.error("Error saving parent details:", error);
-      const errorMessage = error.response?.data?.message || error.message || "An error occurred while saving parent details";
-      enqueueSnackbar(errorMessage, { variant: "error" });
+      await api.post("/parent-details", { ...formData, userId });
+      enqueueSnackbar("Parent details saved successfully!", { variant: "success" });
+      invalidate();
+    } catch (err) {
+      enqueueSnackbar(
+        err.response?.data?.message || err.message || "An error occurred while saving parent details",
+        { variant: "error" }
+      );
     }
   };
 
@@ -130,57 +93,31 @@ export default function ParentsDetails() {
             <Card sx={{ p: 3 }}>
               <Typography variant="h5" gutterBottom>Parents Details</Typography>
               <Divider sx={{ mb: 3 }} />
-              
-              {!isDataFetched ? (
-                <Box sx={{ textAlign: 'center', py: 3 }}>
+
+              {loading ? (
+                <Box sx={{ textAlign: "center", py: 3 }}>
                   <Typography>Loading parent details...</Typography>
                 </Box>
               ) : (
                 <>
                   <Grid container spacing={3}>
                     <Grid item xs={12} md={4}>
-                      <RHFTextField
-                        name="fatherFirstName"
-                        label="Father's First Name"
-                        fullWidth
-                        required
-                      />
+                      <RHFTextField name="fatherFirstName" label="Father's First Name" fullWidth required />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                      <RHFTextField
-                        name="fatherMiddleName"
-                        label="Father's Middle Name"
-                        fullWidth
-                      />
+                      <RHFTextField name="fatherMiddleName" label="Father's Middle Name" fullWidth />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                      <RHFTextField
-                        name="fatherLastName"
-                        label="Father's Last Name"
-                        fullWidth
-                      />
+                      <RHFTextField name="fatherLastName" label="Father's Last Name" fullWidth />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                      <RHFTextField
-                        name="motherFirstName"
-                        label="Mother's First Name"
-                        fullWidth
-                        required
-                      />
+                      <RHFTextField name="motherFirstName" label="Mother's First Name" fullWidth required />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                      <RHFTextField
-                        name="motherMiddleName"
-                        label="Mother's Middle Name"
-                        fullWidth
-                      />
+                      <RHFTextField name="motherMiddleName" label="Mother's Middle Name" fullWidth />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                      <RHFTextField
-                        name="motherLastName"
-                        label="Mother's Last Name"
-                        fullWidth
-                      />
+                      <RHFTextField name="motherLastName" label="Mother's Last Name" fullWidth />
                     </Grid>
                   </Grid>
                 </>
@@ -188,105 +125,41 @@ export default function ParentsDetails() {
             </Card>
           </Grid>
 
-          {isDataFetched && (
+          {!loading && (
             <>
               <Grid item xs={12} md={6}>
                 <Card sx={{ p: 3 }}>
-                  <Stack spacing={3} sx={{ mt: 1}}>
+                  <Stack spacing={3} sx={{ mt: 1 }}>
                     <Typography variant="h6">Father's Details</Typography>
-                    <RHFTextField
-                      name="fatherOccupation"
-                      label="Father's Occupation"
-                      fullWidth
-                      required
-                    />
-                    <RHFTextField
-                      name="fatherOrganization"
-                      label="Father's Organization"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="fatherDesignation"
-                      label="Father's Designation"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="fatherPhoneNumber"
-                      label="Father's Phone Number"
-                      fullWidth
-                      required
-                    />
-                    <RHFTextField
-                      name="fatherOfficePhone"
-                      label="Father's Office Phone"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="fatherOfficeAddress"
-                      label="Father's Office Address"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="fatherAnnualIncome"
-                      label="Father's Annual Income"
-                      fullWidth
-                    />
+                    <RHFTextField name="fatherOccupation" label="Father's Occupation" fullWidth required />
+                    <RHFTextField name="fatherOrganization" label="Father's Organization" fullWidth />
+                    <RHFTextField name="fatherDesignation" label="Father's Designation" fullWidth />
+                    <RHFTextField name="fatherPhoneNumber" label="Father's Phone Number" fullWidth required />
+                    <RHFTextField name="fatherOfficePhone" label="Father's Office Phone" fullWidth />
+                    <RHFTextField name="fatherOfficeAddress" label="Father's Office Address" fullWidth />
+                    <RHFTextField name="fatherAnnualIncome" label="Father's Annual Income" fullWidth />
                   </Stack>
                 </Card>
               </Grid>
               <Grid item xs={12} md={6}>
                 <Card sx={{ p: 3 }}>
-                  <Stack spacing={3} sx={{ mt: 1}}>
+                  <Stack spacing={3} sx={{ mt: 1 }}>
                     <Typography variant="h6">Mother's Details</Typography>
-                    <RHFTextField
-                      name="motherOccupation"
-                      label="Mother's Occupation"
-                      fullWidth
-                      required
-                    />
-                    <RHFTextField
-                      name="motherOrganization"
-                      label="Mother's Organization"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="motherDesignation"
-                      label="Mother's Designation"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="motherPhoneNumber"
-                      label="Mother's Phone Number"
-                      fullWidth
-                      required
-                    />
-                    <RHFTextField
-                      name="motherOfficePhone"
-                      label="Mother's Office Phone"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="motherOfficeAddress"
-                      label="Mother's Office Address"
-                      fullWidth
-                    />
-                    <RHFTextField
-                      name="motherAnnualIncome"
-                      label="Mother's Annual Income"
-                      fullWidth
-                    />
+                    <RHFTextField name="motherOccupation" label="Mother's Occupation" fullWidth required />
+                    <RHFTextField name="motherOrganization" label="Mother's Organization" fullWidth />
+                    <RHFTextField name="motherDesignation" label="Mother's Designation" fullWidth />
+                    <RHFTextField name="motherPhoneNumber" label="Mother's Phone Number" fullWidth required />
+                    <RHFTextField name="motherOfficePhone" label="Mother's Office Phone" fullWidth />
+                    <RHFTextField name="motherOfficeAddress" label="Mother's Office Address" fullWidth />
+                    <RHFTextField name="motherAnnualIncome" label="Mother's Annual Income" fullWidth />
                   </Stack>
                 </Card>
               </Grid>
               <Grid item xs={12} md={12}>
-                <Card sx={{p:3}}>
-                  <Stack spacing={3} alignItems="flex-end" >
+                <Card sx={{ p: 3 }}>
+                  <Stack spacing={3} alignItems="flex-end">
                     <Box display="flex" gap={1}>
-                      <LoadingButton
-                        type="submit"
-                        variant="contained"
-                        loading={isSubmitting}
-                      >
+                      <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
                         Save
                       </LoadingButton>
                     </Box>

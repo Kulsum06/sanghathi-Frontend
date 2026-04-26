@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -10,134 +10,107 @@ import {
   TableRow,
   Select,
   MenuItem,
+  CircularProgress
 } from "@mui/material";
-import axios from "axios";
 import { AuthContext } from "../../context/AuthContext";
 import useStudentSemester from "../../hooks/useStudentSemester";
+import useApiCache from "../../hooks/useApiCache";
 
-const BASE_URL = import.meta.env.VITE_API_URL;
 const Attendance = () => {
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const { semester: studentSemester, loading: semesterLoading } = useStudentSemester();
+  const menteeId = searchParams.get('menteeId') || user?._id;
+  
   const [attendanceData, setAttendanceData] = useState([]);
   const [studentInfo, setStudentInfo] = useState({ usn: '', name: '' });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedSemester, setSelectedSemester] = useState(null); // Initialize to null
-  const [selectedMonth, setSelectedMonth] = useState(0); // 0 for "All"
+  const [selectedSemester, setSelectedSemester] = useState(null); 
+  const [selectedMonth, setSelectedMonth] = useState(0); 
 
-  const fetchAttendance = useCallback(async () => {
-    // Wait for semester to load before fetching
-    if (semesterLoading) {
-      return;
-    }
+  const { data: userData, loading: userLoading, error: userError } = useApiCache(
+    menteeId ? `/users/${menteeId}` : null
+  );
 
-    try {
-      // Get menteeId from URL params if viewing as faculty
-      const menteeId = searchParams.get('menteeId') || user._id;
-      
-      console.log("Fetching attendance for ID:", menteeId); // Debug log
-      
-      // Fetch student info (optional - don't fail if this errors)
-      try {
-        const userResponse = await axios.get(
-          `${BASE_URL}/users/${menteeId}`
-        );
-        
-        if (userResponse.data?.data?.user) {
-          setStudentInfo({
-            usn: userResponse.data.data.user.usn || '',
-            name: userResponse.data.data.user.name || ''
-          });
-        }
-      } catch (userError) {
-        console.warn("Could not fetch user info:", userError);
-        // Use user from context as fallback
-        if (user) {
-          setStudentInfo({
-            usn: user.usn || '',
-            name: user.name || ''
-          });
-        }
+  const { data: attendanceCache, loading: attendLoading, error: attendError } = useApiCache(
+    menteeId && !semesterLoading ? `/students/attendance/${menteeId}` : null
+  );
+
+  useEffect(() => {
+    if (userData !== undefined) {
+      if (userData?.data?.user) {
+        setStudentInfo({
+          usn: userData.data.user.usn || '',
+          name: userData.data.user.name || ''
+        });
+      } else if (user) {
+        setStudentInfo({
+          usn: user.usn || '',
+          name: user.name || ''
+        });
       }
-      
-      const response = await axios.get(
-        `${BASE_URL}/students/attendance/${menteeId}`
-      );
-      
-      console.log("Attendance API response:", response.data); // Debug log
-      
-      const data = response.data.data.attendance;
-      if (data && data.semesters) {
-        setAttendanceData(data.semesters);
-        if (data.semesters.length > 0) {
-          // Use student's current semester from profile if available and exists in data
-          const defaultSem = studentSemester && data.semesters.find(s => s.semester === studentSemester)
-            ? studentSemester
-            : data.semesters[0].semester;
-          console.log('[Attendance] Setting semester to:', defaultSem, '(studentSemester:', studentSemester, ', first available:', data.semesters[0].semester, ')');
-          setSelectedSemester(defaultSem);
+    }
+  }, [userData, user]);
+
+  useEffect(() => {
+    if (attendanceCache !== undefined) {
+      if (attendanceCache?.data?.attendance) {
+        const data = attendanceCache.data.attendance;
+        if (data && data.semesters) {
+          setAttendanceData(data.semesters);
+          if (data.semesters.length > 0) {
+            const defaultSem = studentSemester && data.semesters.find(s => s.semester === studentSemester)
+              ? studentSemester
+              : data.semesters[0].semester;
+            setSelectedSemester(defaultSem);
+          }
+        } else {
+          setAttendanceData([]);
         }
       } else {
         setAttendanceData([]);
       }
-      setLoading(false);
-    } catch (err) {
-      console.error("Attendance fetch error:", err); // Debug log
-      setError("Failed to fetch attendance data");
-      setLoading(false);
     }
-  }, [semesterLoading, searchParams, user._id, studentSemester]);
+  }, [attendanceCache, studentSemester]);
 
-  useEffect(() => {
-    fetchAttendance();
-  }, [fetchAttendance]);
+  const getCumulativeAttendance = (subjectName, semester) => {
+    const semesterData = attendanceData.find(s => s.semester === semester);
+    if (!semesterData) return "No Data";
+    let totalAttended = 0;
+    let totalTaken = 0;
 
-  // No need for transformBackendData in the old way
+    semesterData.months.forEach(monthData => {
+        const sub = monthData.subjects.find(s => s.subjectName === subjectName);
+        if (sub) {
+            totalAttended += sub.attendedClasses;
+            totalTaken += sub.totalClasses;
+        }
+    });
 
-    const getCumulativeAttendance = (subjectName, semester) => {
-        const semesterData = attendanceData.find(s => s.semester === semester);
-        if (!semesterData) return "No Data";
+    if (totalTaken === 0) return "No Data";
+    const percentage = ((totalAttended / totalTaken) * 100).toFixed(2);
+    return `${totalAttended}/${totalTaken} (${percentage}%)`;
+  };
 
-        let totalAttended = 0;
-        let totalTaken = 0;
+  const getOverallAttendance = (semester) => {
+    const semesterData = attendanceData.find(s => s.semester === semester);
+    if (!semesterData) return "No Data";
+    let totalAttended = 0;
+    let totalTaken = 0;
 
-        semesterData.months.forEach(monthData => {
-            const sub = monthData.subjects.find(s => s.subjectName === subjectName);
-            if (sub) {
-                totalAttended += sub.attendedClasses;
-                totalTaken += sub.totalClasses;
-            }
-        });
+    semesterData.months.forEach((monthData) => {
+      monthData.subjects.forEach((subject) => {
+        totalAttended += subject.attendedClasses;
+        totalTaken += subject.totalClasses;
+      });
+    });
+    if (totalTaken === 0) return "No Data";
 
-        if (totalTaken === 0) return "No Data";
-        const percentage = ((totalAttended / totalTaken) * 100).toFixed(2);
-        return `${totalAttended}/${totalTaken} (${percentage}%)`;
-    };
-    const getOverallAttendance = (semester) => {
-        const semesterData = attendanceData.find(s => s.semester === semester);
-        if (!semesterData) return "No Data";
-        let totalAttended = 0;
-        let totalTaken = 0;
-
-        semesterData.months.forEach((monthData) => {
-          monthData.subjects.forEach((subject) => {
-            totalAttended += subject.attendedClasses;
-            totalTaken += subject.totalClasses;
-          });
-        });
-        if (totalTaken === 0) return "No Data";
-
-        const percentage = ((totalAttended / totalTaken) * 100).toFixed(2);
-        return `${totalAttended}/${totalTaken} (${percentage}%)`;
-      };
+    const percentage = ((totalAttended / totalTaken) * 100).toFixed(2);
+    return `${totalAttended}/${totalTaken} (${percentage}%)`;
+  };
 
   const getMonthAttendance = (subjectName, semester, month) => {
-    if (month === 0) {
-      // "All" months: show cumulative for the semester
-      return getCumulativeAttendance(subjectName, semester);
-    }
+    if (month === 0) return getCumulativeAttendance(subjectName, semester);
 
     const semesterData = attendanceData.find((s) => s.semester === semester);
     if (!semesterData) return "No Data";
@@ -155,50 +128,41 @@ const Attendance = () => {
   };
 
   const handleSemesterChange = (event) => {
-    setSelectedSemester(parseInt(event.target.value, 10)); // Ensure it's a number
-    setSelectedMonth(0); // Reset month selection
+    setSelectedSemester(parseInt(event.target.value, 10)); 
+    setSelectedMonth(0); 
   };
 
   const handleMonthChange = (event) => {
-    setSelectedMonth(parseInt(event.target.value, 10)); // Ensure it's a number
+    setSelectedMonth(parseInt(event.target.value, 10)); 
   };
 
   const getAvailableMonths = () => {
-    if (!selectedSemester) return []; // No semester selected
+    if (!selectedSemester) return []; 
     const semesterData = attendanceData.find((s) => s.semester === selectedSemester);
-    if (!semesterData) return []; // No data for the selected semester
+    if (!semesterData) return []; 
     const months = semesterData.months.map((m) => m.month);
-    return [0, ...months]; // Add 0 for "All"
+    return [0, ...months]; 
   };
 
-    // Helper function to get unique subjects for the selected semester
-    const getSubjectsForSemester = () => {
-        if (!selectedSemester) return [];
-        const semesterData = attendanceData.find(s => s.semester === selectedSemester);
-        if (!semesterData) return [];
+  const getSubjectsForSemester = () => {
+    if (!selectedSemester) return [];
+    const semesterData = attendanceData.find(s => s.semester === selectedSemester);
+    if (!semesterData) return [];
+    const allSubjects = semesterData.months.flatMap(monthData => monthData.subjects);
+    const uniqueSubjects = new Map();
+    allSubjects.forEach(subject => {
+        const key = subject.subjectName || 'Unknown Subject';
+        if (!uniqueSubjects.has(key)) {
+            uniqueSubjects.set(key, {
+                subjectCode: subject.subjectCode || 'N/A',
+                subjectName: subject.subjectName || 'Unknown Subject'
+            });
+        }
+    });
+    return Array.from(uniqueSubjects.values()).sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+  };
 
-        // Get all subjects from all months in the selected semester
-        const allSubjects = semesterData.months.flatMap(monthData => monthData.subjects);
-        
-        // Create a Map to store unique subjects by subjectName (since subjectCode might be missing)
-        const uniqueSubjects = new Map();
-        
-        // Process all subjects, keeping only the most recent entry for each subject
-        allSubjects.forEach(subject => {
-            // Use subjectName as the unique key since subjectCode might be empty
-            const key = subject.subjectName || 'Unknown Subject';
-            if (!uniqueSubjects.has(key)) {
-                uniqueSubjects.set(key, {
-                    subjectCode: subject.subjectCode || 'N/A',
-                    subjectName: subject.subjectName || 'Unknown Subject'
-                });
-            }
-        });
-
-        // Convert Map to array and sort by subjectName
-        return Array.from(uniqueSubjects.values())
-            .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
-    };
+  const loading = userLoading || attendLoading;
 
   return (
     <Box sx={{ p: 2 }}>
@@ -207,40 +171,27 @@ const Attendance = () => {
         <Box sx={{ mb: 2, display: 'flex', gap: 2, justifyContent: 'center' }}>
           <strong>USN:</strong> {studentInfo.usn}
           {studentInfo.name && (
-            <>
-              <strong>Name:</strong> {studentInfo.name}
-            </>
+            <><strong>Name:</strong> {studentInfo.name}</>
           )}
           {selectedSemester && (
-            <>
-              <strong>Semester:</strong> {selectedSemester}
-            </>
+            <><strong>Semester:</strong> {selectedSemester}</>
           )}
         </Box>
       )}
+      {(attendError) && <Box color="error.main" mb={2} textAlign="center">Error loading attendance information.</Box>}
       <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
         <label>
           Select Semester:
-          <Select
-            value={selectedSemester}
-            onChange={handleSemesterChange}
-            sx={{ ml: 1 }}
-          >
+          <Select value={selectedSemester || ''} onChange={handleSemesterChange} sx={{ ml: 1, minWidth: 100 }}>
             {attendanceData.map((sem) => (
-              <MenuItem key={sem.semester} value={sem.semester}>
-                Semester {sem.semester}
-              </MenuItem>
+              <MenuItem key={sem.semester} value={sem.semester}>Semester {sem.semester}</MenuItem>
             ))}
           </Select>
         </label>
         <Box sx={{ ml: 2 }}>
           <label>
             Select Month:
-            <Select
-              value={selectedMonth}
-              onChange={handleMonthChange}
-              sx={{ ml: 1 }}
-            >
+            <Select value={selectedMonth} onChange={handleMonthChange} sx={{ ml: 1, minWidth: 100 }}>
               {getAvailableMonths().map((month) => (
                 <MenuItem key={month} value={month}>
                   {month === 0 ? "All" : `Month ${month}`}
@@ -250,54 +201,51 @@ const Attendance = () => {
           </label>
         </Box>
       </Box>
-      <TableContainer sx={{ border: "1px solid gray" }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ border: "1px solid gray" }}>
-                Subject Code
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray" }}>
-                Subject Name
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray" }}>
-                Attendance
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray" }}>
-                Cumulative Attendance
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {getSubjectsForSemester().map((subject, index) => (
-                <TableRow key={`${subject.subjectName}-${index}`}>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.subjectCode}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.subjectName}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {getMonthAttendance(subject.subjectName, selectedSemester, selectedMonth)}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {getCumulativeAttendance(subject.subjectName, selectedSemester)}
-                  </TableCell>
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <TableContainer sx={{ border: "1px solid gray" }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ border: "1px solid gray" }}>Subject Code</TableCell>
+                <TableCell sx={{ border: "1px solid gray" }}>Subject Name</TableCell>
+                <TableCell sx={{ border: "1px solid gray" }}>Attendance</TableCell>
+                <TableCell sx={{ border: "1px solid gray" }}>Cumulative Attendance</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {getSubjectsForSemester().length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} align="center">No Data Available</TableCell>
                 </TableRow>
-              ))}
-            <TableRow sx={{ fontWeight: "bold" }}>
-              <TableCell colSpan={2}>Overall Attendance</TableCell>
-              <TableCell>
-                {getOverallAttendance(selectedSemester)}
-                <Box component="span" sx={{ ml: 1 }}>
-                  (for selected semester)
-                </Box>
-              </TableCell>
-              <TableCell></TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </TableContainer>
+              ) : (
+                getSubjectsForSemester().map((subject, index) => (
+                  <TableRow key={`${subject.subjectName}-${index}`}>
+                    <TableCell sx={{ border: "1px solid gray" }}>{subject.subjectCode}</TableCell>
+                    <TableCell sx={{ border: "1px solid gray" }}>{subject.subjectName}</TableCell>
+                    <TableCell sx={{ border: "1px solid gray" }}>{getMonthAttendance(subject.subjectName, selectedSemester, selectedMonth)}</TableCell>
+                    <TableCell sx={{ border: "1px solid gray" }}>{getCumulativeAttendance(subject.subjectName, selectedSemester)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+              <TableRow sx={{ fontWeight: "bold" }}>
+                <TableCell colSpan={2}>Overall Attendance</TableCell>
+                <TableCell>
+                  {getOverallAttendance(selectedSemester)}
+                  <Box component="span" sx={{ ml: 1 }}>
+                    (for selected semester)
+                  </Box>
+                </TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
     </Box>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useContext } from "react";
+import React, { useEffect, useContext } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -8,163 +8,102 @@ import { LoadingButton } from "@mui/lab";
 import { Delete as DeleteIcon } from "@mui/icons-material";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
+import useApiCache from "../../hooks/useApiCache";
+
+const EMPTY_ROW = { eventType: "", eventTitle: "", description: "", eventDate: "" };
 
 export default function Activity() {
-    const [searchParams] = useSearchParams();
-    const menteeId = searchParams.get('menteeId');
-
   const { enqueueSnackbar } = useSnackbar();
-    const { user } = useContext(AuthContext);
-    console.log("User : ",user);
-    console.log("id: ",menteeId);
-    const methods = useForm({
-      defaultValues: {
-        activity: [{ eventType: "", eventTitle: "", description: "", eventDate: "" }],
-      },
-    });
+  const { user } = useContext(AuthContext);
+  const [searchParams] = useSearchParams();
+  const menteeId = searchParams.get("menteeId");
+  const userId = menteeId || user?._id;
 
+  const methods = useForm({ defaultValues: { activity: [{ ...EMPTY_ROW }] } });
   const { handleSubmit, reset, formState: { isSubmitting } } = methods;
-    const { fields, append, remove } = useFieldArray({
-      control: methods.control,
-      name: "activity",
-    });
+  const { fields, append, remove } = useFieldArray({ control: methods.control, name: "activity" });
 
-    const fetchActivity = useCallback(async () => {
-      try {
-        let response;
-        if(menteeId)
-          response = await api.get(`/activity-data/activity/${menteeId}`);
-        else
-          response = await api.get(`/activity-data/activity/${user._id}`);
-        const { data } = response.data;
-    
-        if (data && Array.isArray(data.activity)) {
-          const formattedActivity = data.activity.map((activity) => ({
-            ...activity,
-            eventDate: activity.eventDate ? new Date(activity.eventDate).toISOString().split("T")[0] : "",
-          }));
-          reset({ activity: formattedActivity });
-        } else {
-          console.warn("No activity data found for this user");
-          reset({ activity: [{ eventType: "", eventTitle: "", description: "", eventDate: ""  }] });
-        }
-      } catch (error) {
-        console.log("Error fetching activity data:", error);
+  const { data, loading, error, invalidate } = useApiCache(
+    userId ? `/activity-data/activity/${userId}` : null
+  );
+
+  useEffect(() => {
+    if (data !== undefined) {
+      const list = data?.data?.activity;
+      if (Array.isArray(list) && list.length > 0) {
+        const formatted = list.map((a) => ({
+          ...a,
+          eventDate: a.eventDate ? new Date(a.eventDate).toISOString().split("T")[0] : "",
+        }));
+        reset({ activity: formatted });
+      } else {
+        reset({ activity: [{ ...EMPTY_ROW }] });
       }
-    }, [user._id, reset, enqueueSnackbar]);
+    }
+  }, [data, reset]);
 
-    useEffect(() => {
-      fetchActivity();
-    }, [fetchActivity]);
-  
-    const handleReset = () => {
-      reset();
-    };
-  
-    const onSubmit = useCallback(
-      async (formData) => {
-        try {
-          await api.post("/activity-data/activity", { activity: formData.activity, userId: user._id });
-          enqueueSnackbar("Activity data updated successfully!", {
-            variant: "success",
-          });
-          await fetchActivity();
-        } catch (error) {
-          console.error(error);
-          enqueueSnackbar("An error occurred while processing the request", {
-            variant: "error",
-          });
-        }
-      },
-      [enqueueSnackbar, fetchActivity, user._id]
-    );
+  useEffect(() => {
+    if (error) enqueueSnackbar("Error fetching activity data", { variant: "error" });
+  }, [error, enqueueSnackbar]);
 
-return (
+  const onSubmit = async (formData) => {
+    try {
+      await api.post("/activity-data/activity", { activity: formData.activity, userId: user._id });
+      enqueueSnackbar("Activity data updated successfully!", { variant: "success" });
+      invalidate();
+    } catch (err) {
+      enqueueSnackbar("An error occurred while processing the request", { variant: "error" });
+    }
+  };
+
+  return (
     <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
-          <Card sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-            Event Participation Record in Sports, Cultural, Societal, etc by the Student
-            </Typography>
-            <Grid container spacing={2}>
-              {fields.map((item, index) => (
-                <Grid 
-                  container 
-                  spacing={2} 
-                  key={item.id} 
-                  alignItems="center" 
-                  sx={{ mb: 1, mt: 1 }}
-                  >
-                  <Grid item xs={1}>
-                    <TextField 
-                    disabled 
-                    value={index + 1} 
-                    label="Sl. No." 
-                    variant="outlined" 
-                    />
-                  </Grid>
-                  <Grid item xs={2}>
-                  <RHFTextField
-                    name={`activity[${index}].eventType`} 
-                    label="Event Type"
-                    fullWidth
-                  />
-                  </Grid>
-                  <Grid item xs={3}>
-                  <RHFTextField
-                    name={`activity[${index}].eventTitle`} 
-                    label="Event Title"
-                    fullWidth
-                  />
-                  </Grid>
-                  <Grid item xs={3}>
-                  <RHFTextField
-                    name={`activity[${index}].description`} 
-                    label="Description"
-                    fullWidth
-                  />
-                  </Grid>
-                  <Grid item xs={2}>
-                  <RHFTextField
-                    name={`activity[${index}].eventDate`}
-                    label="Event Date"
-                    type="date"
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                  />
-                  </Grid>
-                  <Grid item xs={1}>
-                    <IconButton color="error" onClick={() => remove(index)} sx={{ mt: 1 }}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </Grid>
-                </Grid>
-              ))}
-                <Grid item xs={12}>
-                  <Button 
-                    variant="contained" 
-                    onClick={() => append({ eventType: "", eventTitle: "", description: "", eventDate: "" })} 
-                    sx={{ mt: 2, display: "block", mx: "auto" }}>
-                    Add Activity
-                  </Button>
-                </Grid>
-        <Grid item xs={12}>
+      <Card sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Event Participation Record in Sports, Cultural, Societal, etc by the Student
+        </Typography>
+        <Grid container spacing={2}>
+          {fields.map((item, index) => (
+            <Grid container spacing={2} key={item.id} alignItems="center" sx={{ mb: 1, mt: 1 }}>
+              <Grid item xs={1}>
+                <TextField disabled value={index + 1} label="Sl. No." variant="outlined" />
+              </Grid>
+              <Grid item xs={2}>
+                <RHFTextField name={`activity[${index}].eventType`} label="Event Type" fullWidth />
+              </Grid>
+              <Grid item xs={3}>
+                <RHFTextField name={`activity[${index}].eventTitle`} label="Event Title" fullWidth />
+              </Grid>
+              <Grid item xs={3}>
+                <RHFTextField name={`activity[${index}].description`} label="Description" fullWidth />
+              </Grid>
+              <Grid item xs={2}>
+                <RHFTextField name={`activity[${index}].eventDate`} label="Event Date" type="date" InputLabelProps={{ shrink: true }} fullWidth />
+              </Grid>
+              <Grid item xs={1}>
+                <IconButton color="error" onClick={() => remove(index)} sx={{ mt: 1 }}>
+                  <DeleteIcon />
+                </IconButton>
+              </Grid>
+            </Grid>
+          ))}
+          <Grid item xs={12}>
+            <Button variant="contained" onClick={() => append({ ...EMPTY_ROW })} sx={{ mt: 2, display: "block", mx: "auto" }}>
+              Add Activity
+            </Button>
+          </Grid>
+          <Grid item xs={12}>
             <Stack direction="row" spacing={2} justifyContent="flex-end">
               <Box display="flex" gap={1}>
                 {import.meta.env.MODE === "development" && (
-                  <LoadingButton 
-                  variant="outlined" 
-                  onClick={handleReset}>
-                    Reset
-                  </LoadingButton>
+                  <LoadingButton variant="outlined" onClick={() => reset({ activity: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
                 )}
-                <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
-                  Save
-                </LoadingButton>
+                <LoadingButton type="submit" variant="contained" loading={isSubmitting || loading}>Save</LoadingButton>
               </Box>
             </Stack>
+          </Grid>
         </Grid>
-      </Grid>
-    </Card>
-  </FormProvider>
+      </Card>
+    </FormProvider>
   );
 }

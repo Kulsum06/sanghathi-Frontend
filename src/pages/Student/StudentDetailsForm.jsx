@@ -19,6 +19,7 @@ import {
   RHFSelect,
 } from "../../components/hook-form";
 import RHFUploadAvatar from '../../components/RHFUploadAvatar';
+import useApiCache from "../../hooks/useApiCache";
 
 const yesNoOptions = [
   { value: "yes", label: "Yes" },
@@ -50,11 +51,11 @@ const isCloudinaryUrl = (url) => {
 
 const getCloudinaryPublicId = (url) => {
   if (!url || !url.includes('cloudinary.com')) return null;
-  
+
   try {
     const matches = url.match(/\/upload\/(?:v\d+\/)?(.+)$/);
     if (!matches) return null;
-    
+
     // Get the full path including folders but remove the file extension
     const fullPath = matches[1].replace(/\.[^/.]+$/, '');
     console.log('[getCloudinaryPublicId] Extracted public ID:', fullPath);
@@ -160,58 +161,50 @@ export default function StudentDetailsForm({ colorMode, menteeId, isAdminEdit })
     trigger,
   } = methods;
 
-  const fetchStudentData = useCallback(async () => {
-    try {
-      let response;
-      if(menteeId) {
-        response = await api.get(`student-profiles/${menteeId}`);
-      } else {
-        response = await api.get(`student-profiles/${user._id}`);
-      }
-      
-      // Handle the response based on the structure returned by the backend
+  const userId = menteeId || user?._id;
+  const { data: cacheData, error: fetchError, invalidate } = useApiCache(
+    userId ? `student-profiles/${userId}` : null
+  );
+
+  useEffect(() => {
+    if (cacheData !== undefined) {
       let studentData;
-      if (response.data.data) {
-        // If response has data.data structure
-        studentData = response.data.data;
+      if (cacheData?.data) {
+        studentData = cacheData.data;
       } else {
-        // If response is directly the data object
-        studentData = { studentProfile: response.data };
+        studentData = { studentProfile: cacheData };
       }
-      
-      const data = studentData;
-      
-      if (data) {
+
+      if (studentData && studentData.studentProfile) {
         //Formatting dates
-        data.studentProfile.dateOfBirth = data.studentProfile.dateOfBirth ? new Date(data.studentProfile.dateOfBirth).toISOString().split('T')[0] : '';
-        data.studentProfile.admissionDate = data.studentProfile.admissionDate ? new Date(data.studentProfile.admissionDate).toISOString().split('T')[0] : '';
-        
-        Object.keys(data.studentProfile).forEach((key) => {
+        studentData.studentProfile.dateOfBirth = studentData.studentProfile.dateOfBirth ? new Date(studentData.studentProfile.dateOfBirth).toISOString().split('T')[0] : '';
+        studentData.studentProfile.admissionDate = studentData.studentProfile.admissionDate ? new Date(studentData.studentProfile.admissionDate).toISOString().split('T')[0] : '';
+
+        Object.keys(studentData.studentProfile).forEach((key) => {
           if (
-            data.studentProfile[key] &&
-            typeof data.studentProfile[key] === "object"
+            studentData.studentProfile[key] &&
+            typeof studentData.studentProfile[key] === "object"
           ) {
-            Object.keys(data.studentProfile[key]).forEach((innerKey) => {
+            Object.keys(studentData.studentProfile[key]).forEach((innerKey) => {
               setValue(
                 `studentProfile.${key}.${innerKey}`,
-                data.studentProfile[key][innerKey]
+                studentData.studentProfile[key][innerKey]
               );
             });
           } else {
-            setValue(`studentProfile.${key}`, data.studentProfile[key]);
+            setValue(`studentProfile.${key}`, studentData.studentProfile[key]);
           }
         });
         setIsDataFetched(true);
       }
-      console.log("[StudentDetailsForm] Student data fetched successfully:", data);
-    } catch (error) {
-      console.error("[StudentDetailsForm] Error fetching student data:", error.response || error);
     }
-  }, [user._id, setValue, menteeId]);
+  }, [cacheData, setValue]);
 
   useEffect(() => {
-    fetchStudentData();
-  }, [fetchStudentData]);
+    if (fetchError) {
+      console.error("[StudentDetailsForm] Error fetching student data:", fetchError);
+    }
+  }, [fetchError]);
 
   const handleReset = () => {
     reset();
@@ -229,7 +222,7 @@ export default function StudentDetailsForm({ colorMode, menteeId, isAdminEdit })
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          
+
           // Calculate new dimensions
           if (width > height) {
             if (width > maxWidth) {
@@ -242,13 +235,13 @@ export default function StudentDetailsForm({ colorMode, menteeId, isAdminEdit })
               height = maxHeight;
             }
           }
-          
+
           canvas.width = width;
           canvas.height = height;
-          
+
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          
+
           // Get the compressed base64 string
           const dataUrl = canvas.toDataURL('image/jpeg', quality);
           resolve(dataUrl);
@@ -260,28 +253,28 @@ export default function StudentDetailsForm({ colorMode, menteeId, isAdminEdit })
   const handleDropAvatar = useCallback(
     async (acceptedFiles) => {
       const file = acceptedFiles[0];
-      
+
       if (file) {
         console.log("File received:", {
           name: file.name,
           type: file.type,
           size: file.size
         });
-        
+
         try {
           // Compress/resize the image before converting to base64
           // console.log("Starting image compression...");
           const compressedBase64 = await compressImage(file, 800, 800, 0.7);
           // console.log("Image compressed successfully");
-          
+
           // Store the compressed base64 string directly without uploading to Cloudinary
           setValue('studentProfile.photo', compressedBase64);
-          
+
           // Create a preview URL for display
           const previewUrl = URL.createObjectURL(file);
           setValue('studentProfile.photoPreview', previewUrl);
           // console.log("Form values updated with new image");
-          
+
           // Force a re-render if needed
           trigger('studentProfile.photo');
         } catch (error) {
@@ -297,21 +290,21 @@ export default function StudentDetailsForm({ colorMode, menteeId, isAdminEdit })
     try {
       const currentPhoto = watch('studentProfile.photo');
       let photoUrl = currentPhoto;
-  
+
       // If uploading a new image (base64)
-      if (typeof currentPhoto === 'string' && 
-          currentPhoto.includes('data:image') && 
-          !isCloudinaryUrl(currentPhoto)) {
-        
+      if (typeof currentPhoto === 'string' &&
+        currentPhoto.includes('data:image') &&
+        !isCloudinaryUrl(currentPhoto)) {
+
         // Get the current stored profile from the database to check for existing Cloudinary image
         try {
           const currentProfileResponse = await api.get(`students/profile/${menteeId || user._id}`);
           const currentStoredPhotoUrl = currentProfileResponse.data?.data?.studentProfile?.photo;
-          
+
           // Delete the existing Cloudinary image if it exists
           if (isCloudinaryUrl(currentStoredPhotoUrl)) {
             const publicId = getCloudinaryPublicId(currentStoredPhotoUrl);
-            
+
             if (publicId) {
               try {
                 const deleteResponse = await api.delete(`v1/upload/profile-image/${encodeURIComponent(publicId)}`);
@@ -331,18 +324,18 @@ export default function StudentDetailsForm({ colorMode, menteeId, isAdminEdit })
               }
             }
           }
-  
+
           // Then upload the new image
           try {
             const uploadResponse = await api.post('v1/upload/profile-image', {
               image: currentPhoto
             });
-            
+
             const cloudinaryUrl = uploadResponse.data?.data?.imageUrl || uploadResponse.data?.imageUrl;
             if (!cloudinaryUrl) {
               throw new Error('No image URL received from server');
             }
-            
+
             photoUrl = cloudinaryUrl;
             console.log('[Image Upload] New image uploaded successfully:', photoUrl.substring(0, 100));
           } catch (uploadError) {
@@ -362,19 +355,19 @@ export default function StudentDetailsForm({ colorMode, menteeId, isAdminEdit })
           return;
         }
       }
-  
+
       // Continue with profile update using the new photo URL
       const updateData = {
         userId: menteeId || user._id,
         ...data.studentProfile,
         photo: photoUrl
       };
-  
+
       const response = await api.post('students/profile', updateData);
-  
+
       if (response.data.status === "success") {
         enqueueSnackbar("Profile updated successfully", { variant: "success" });
-        await fetchStudentData(); // Refresh the data
+        invalidate(); // Refresh the data
       } else {
         throw new Error('Profile update failed');
       }

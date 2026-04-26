@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+import React, { useEffect, useContext } from "react";
 import { useSnackbar } from "notistack";
 import { useSearchParams } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
@@ -11,18 +11,14 @@ import {
   Stack,
   Typography,
   FormControl,
-  FormLabel,
   FormGroup,
   FormControlLabel,
   Checkbox,
   Divider,
 } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
-import {
-  FormProvider,
-  RHFTextField,
-  RHFSelect,
-} from "../../components/hook-form";
+import { FormProvider, RHFTextField, RHFSelect } from "../../components/hook-form";
+import useApiCache from "../../hooks/useApiCache";
 
 const DEFAULT_VALUES = {
   admissionYear: "",
@@ -44,37 +40,24 @@ export default function AdmissionDetails() {
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const menteeId = searchParams.get("menteeId");
-  const [isDataFetched, setIsDataFetched] = useState(false);
+  const userId = menteeId || user?._id;
 
-  const methods = useForm({
-    defaultValues: DEFAULT_VALUES,
-  });
-
-  const {
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { isSubmitting },
-  } = methods;
+  const methods = useForm({ defaultValues: DEFAULT_VALUES });
+  const { handleSubmit, setValue, watch, formState: { isSubmitting } } = methods;
   const documentsSubmitted = watch("documentsSubmitted");
 
-  const fetchAdmissionDetails = useCallback(async () => {
-    try {
-      const userId = menteeId || user?._id;
-      if (!userId) return;
+  const { data, error, invalidate } = useApiCache(
+    userId ? `/v1/admissions/${userId}` : null
+  );
 
-      const admissionResponse = await api.get(`/v1/admissions/${userId}`);
-      const admissionData = admissionResponse.data.data?.admissionDetails;
-
+  useEffect(() => {
+    if (data !== undefined) {
+      const admissionData = data?.data?.admissionDetails;
       if (admissionData) {
         Object.keys(DEFAULT_VALUES).forEach((key) => {
           if (key === "documentsSubmitted") {
             setValue(key, admissionData[key] || []);
-          } else if (
-            typeof admissionData[key] === "object" &&
-            admissionData[key] !== null
-          ) {
+          } else if (typeof admissionData[key] === "object" && admissionData[key] !== null) {
             Object.keys(admissionData[key]).forEach((subKey) => {
               setValue(`${key}.${subKey}`, admissionData[key][subKey] || "");
             });
@@ -83,67 +66,40 @@ export default function AdmissionDetails() {
           }
         });
       }
-    } catch (error) {
-      // if (error.response?.status !== 404) {
-        console.error("Error fetching academic details:", error);
-        // enqueueSnackbar("Error fetching admission details", {
-        //   variant: "error",
-      //   // });
-      // }
-    } finally {
-      setIsDataFetched(true);
     }
-  }, [menteeId, user?._id, setValue, enqueueSnackbar]);
+  }, [data, setValue]);
 
   useEffect(() => {
-    fetchAdmissionDetails();
-  }, [fetchAdmissionDetails]);
+    if (error) console.error("Error fetching admission details:", error);
+  }, [error]);
 
-  const onSubmit = async (data) => {
+  const onSubmit = async (formData) => {
     try {
-      // Clean up empty strings and null values
-      const cleanedData = Object.entries(data).reduce((acc, [key, value]) => {
+      const cleanedData = Object.entries(formData).reduce((acc, [key, value]) => {
         if (key === 'branchChange') {
-          // Handle branchChange object
           acc[key] = Object.entries(value).reduce((branchAcc, [branchKey, branchValue]) => {
-            if (branchValue !== null && branchValue !== '') {
-              branchAcc[branchKey] = branchValue;
-            }
+            if (branchValue !== null && branchValue !== '') branchAcc[branchKey] = branchValue;
             return branchAcc;
           }, {});
         } else if (key === 'documentsSubmitted') {
-          // Keep documentsSubmitted array as is
           acc[key] = value;
         } else if (value !== null && value !== '') {
-          // Keep non-empty values
           acc[key] = value;
         }
         return acc;
       }, {});
 
-      const payload = {
-        ...cleanedData,
-        userId: menteeId || user?._id,
-      };
-
-      const response = await api.post("/v1/admissions", payload);
-      enqueueSnackbar("Admission details saved successfully!", {
-        variant: "success",
-      });
-    } catch (error) {
-      console.error("Error saving admission details:", error);
-      enqueueSnackbar(error.response?.data?.message || "Failed to save admission details.", {
-        variant: "error",
-      });
+      const payload = { ...cleanedData, userId };
+      await api.post("/v1/admissions", payload);
+      enqueueSnackbar("Admission details saved successfully!", { variant: "success" });
+      invalidate();
+    } catch (err) {
+      console.error("Error saving admission details:", err);
+      enqueueSnackbar(err.response?.data?.message || "Failed to save admission details.", { variant: "error" });
     }
   };
 
-  const documentsList = [
-    "SSLC/X Marks Card",
-    "PUC/XII Marks Card",
-    "Caste Certificate",
-    "Migration Certificate",
-  ];
+  const documentsList = ["SSLC/X Marks Card", "PUC/XII Marks Card", "Caste Certificate", "Migration Certificate"];
 
   return (
     <div>
@@ -151,64 +107,29 @@ export default function AdmissionDetails() {
         <Grid container spacing={2}>
           <Grid item xs={12}>
             <Card sx={{ p: 3 }}>
-              <Typography variant="h5" gutterBottom>
-                Admission Details
-              </Typography>
+              <Typography variant="h5" gutterBottom>Admission Details</Typography>
               <Divider sx={{ mb: 3 }} />
-
-              <Box
-                sx={{
-                  display: "grid",
-                  rowGap: 3,
-                  columnGap: 2,
-                  gridTemplateColumns: {
-                    xs: "repeat(1, 1fr)",
-                    sm: "repeat(2, 1fr)",
-                  },
-                }}
-              >
+              <Box sx={{ display: "grid", rowGap: 3, columnGap: 2, gridTemplateColumns: { xs: "repeat(1, 1fr)", sm: "repeat(2, 1fr)" } }}>
                 <RHFTextField name="admissionYear" label="Admission Year" />
                 <RHFTextField name="branch" label="Branch" />
                 <RHFSelect name="admissionType" label="Type of Admission">
                   <option value="" />
-                  {["COMEDK", "CET", "MANAGEMENT", "SNQ"].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
+                  {["COMEDK", "CET", "MANAGEMENT", "SNQ"].map((o) => <option key={o} value={o}>{o}</option>)}
                 </RHFSelect>
                 <RHFTextField name="category" label="Category" />
                 <RHFTextField name="collegeId" label="College ID Number" />
               </Box>
 
-              <Typography variant="h6" sx={{ mt: 3 }}>
-                change of Branch (if applicable)
-              </Typography>
+              <Typography variant="h6" sx={{ mt: 3 }}>Change of Branch (if applicable)</Typography>
               <Divider sx={{ mb: 3 }} />
-
-              <Box
-                sx={{
-                  display: "grid",
-                  rowGap: 3,
-                  columnGap: 2,
-                  gridTemplateColumns: {
-                    xs: "repeat(1, 1fr)",
-                    sm: "repeat(2, 1fr)",
-                  },
-                }}
-              >
+              <Box sx={{ display: "grid", rowGap: 3, columnGap: 2, gridTemplateColumns: { xs: "repeat(1, 1fr)", sm: "repeat(2, 1fr)" } }}>
                 <RHFTextField name="branchChange.year" label="Year of Change" />
                 <RHFTextField name="branchChange.branch" label="New Branch" />
                 <RHFTextField name="branchChange.usn" label="New USN" />
-                <RHFTextField
-                  name="branchChange.collegeId"
-                  label="New College ID"
-                />
+                <RHFTextField name="branchChange.collegeId" label="New College ID" />
               </Box>
 
-              <Typography variant="h6" sx={{ mt: 3 }}>
-                Documents Submitted
-              </Typography>
+              <Typography variant="h6" sx={{ mt: 3 }}>Documents Submitted</Typography>
               <Divider sx={{ mb: 3 }} />
               <FormControl component="fieldset">
                 <FormGroup>
@@ -220,11 +141,7 @@ export default function AdmissionDetails() {
                           checked={documentsSubmitted.includes(doc)}
                           onChange={(e) => {
                             const checked = e.target.checked;
-                            const updatedDocs = checked
-                              ? [...(documentsSubmitted || []), doc]
-                              : documentsSubmitted.filter(
-                                  (item) => item !== doc
-                                );
+                            const updatedDocs = checked ? [...(documentsSubmitted || []), doc] : documentsSubmitted.filter((item) => item !== doc);
                             setValue("documentsSubmitted", updatedDocs);
                           }}
                         />
@@ -236,11 +153,7 @@ export default function AdmissionDetails() {
               </FormControl>
 
               <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
-                <LoadingButton
-                  type="submit"
-                  variant="contained"
-                  loading={isSubmitting}
-                >
+                <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
                   Save Changes
                 </LoadingButton>
               </Stack>

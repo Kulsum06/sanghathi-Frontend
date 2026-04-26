@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { Box, Grid, Card, Stack, FormControlLabel, Switch, Typography, Divider } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
+import useApiCache from "../../hooks/useApiCache";
 
 const DEFAULT_VALUES = {
   currentAddress: {
@@ -39,63 +40,41 @@ export default function ContactDetails({ userId: propUserId, colorMode }) {
   const [searchParams] = useSearchParams();
   const menteeId = searchParams.get('menteeId');
   
-  // Get userId from either prop, menteeId, or user context
   const userId = propUserId || menteeId || (user ? (user._id || user.id || user.userId) : null);
   
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
   const methods = useForm({ defaultValues: DEFAULT_VALUES });
   const { handleSubmit, reset, setValue, formState: { isSubmitting } } = methods;
 
-  // Fetch data from backend when component mounts
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!userId) {
-        console.error('No userId available for fetching data');
-        enqueueSnackbar("User ID is not available", { variant: "error" });
-        return;
-      }
-      
-      try {
-        console.log('Fetching contact details for userId:', userId);
-        const response = await api.get(`/v1/contact-details/${userId}`);
-        console.log("Fetched data:", response.data);
-        
-        const contactData = response.data.data?.contactDetails || response.data;
-        
-        if (contactData) {
-          // Process current address
-          if (contactData.currentAddress) {
-            Object.keys(DEFAULT_VALUES.currentAddress).forEach(key => {
-              setValue(`currentAddress.${key}`, contactData.currentAddress[key] || '');
-            });
-          }
-          
-          // Process permanent address
-          if (contactData.permanentAddress) {
-            Object.keys(DEFAULT_VALUES.permanentAddress).forEach(key => {
-              setValue(`permanentAddress.${key}`, contactData.permanentAddress[key] || '');
-            });
-            
-            // Check if addresses are the same
-            const currentAddressValues = contactData.currentAddress || {};
-            const permanentAddressValues = contactData.permanentAddress || {};
-            const addressesMatch = Object.keys(DEFAULT_VALUES.currentAddress).every(
-              key => currentAddressValues[key] === permanentAddressValues[key]
-            );
-            
-            setSameAsCurrent(addressesMatch);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching contact details:", error);
-        // if (error.response?.status !== 404) {
-        //   enqueueSnackbar(error.message || "Failed to load contact details", { variant: "error" });
-        // }
-      }
-    };
+  const { data, error, invalidate } = useApiCache(
+    userId ? `/v1/contact-details/${userId}` : null
+  );
 
-    fetchData();
-  }, [userId, reset, enqueueSnackbar]);
+  useEffect(() => {
+    if (data !== undefined) {
+      const contactData = data?.data?.contactDetails || data;
+      if (contactData && contactData.currentAddress) {
+        Object.keys(DEFAULT_VALUES.currentAddress).forEach(key => {
+          setValue(`currentAddress.${key}`, contactData.currentAddress[key] || '');
+        });
+      }
+      if (contactData && contactData.permanentAddress) {
+        Object.keys(DEFAULT_VALUES.permanentAddress).forEach(key => {
+          setValue(`permanentAddress.${key}`, contactData.permanentAddress[key] || '');
+        });
+        const currentAddressValues = contactData.currentAddress || {};
+        const permanentAddressValues = contactData.permanentAddress || {};
+        const addressesMatch = Object.keys(DEFAULT_VALUES.currentAddress).every(
+          key => currentAddressValues[key] === permanentAddressValues[key]
+        );
+        setSameAsCurrent(addressesMatch);
+      }
+    }
+  }, [data, setValue]);
+
+  useEffect(() => {
+    if (error) console.error("Error fetching contact details:", error);
+  }, [error]);
 
   // Handle Same As Current Switch
   const handleSwitchChange = (event) => {
@@ -107,33 +86,14 @@ export default function ContactDetails({ userId: propUserId, colorMode }) {
     }
   };
 
-  // Submit Form Data
   const onSubmit = async (formData) => {
-    if (!userId) {
-      enqueueSnackbar("User ID is required", { variant: "error" });
-      return;
-    }
-    
+    if (!userId) { enqueueSnackbar("User ID is required", { variant: "error" }); return; }
     try {
-      console.log('Submitting contact details with userId:', userId);
-      
-      // Create payload
-      const payload = { 
-        userId,
-        currentAddress: formData.currentAddress,
-        permanentAddress: formData.permanentAddress
-      };
-      
-      console.log('Submission payload:', payload);
-      
-      const response = await api.post("/v1/contact-details", payload);
-      console.log('Submission response:', response.data);
-      
+      await api.post("/v1/contact-details", { userId, currentAddress: formData.currentAddress, permanentAddress: formData.permanentAddress });
       enqueueSnackbar("Contact details saved successfully!", { variant: "success" });
+      invalidate();
     } catch (error) {
-      console.error("Error saving contact details:", error);
-      const errorMessage = error.response?.data?.message || error.message || "An error occurred while saving contact details";
-      enqueueSnackbar(errorMessage, { variant: "error" });
+      enqueueSnackbar(error.response?.data?.message || error.message || "An error occurred while saving contact details", { variant: "error" });
     }
   };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext } from "react";
 import {
   Box,
   Table,
@@ -10,80 +10,45 @@ import {
   Select,
   MenuItem,
   Typography,
-  Button,
-  CircularProgress,
 } from "@mui/material";
-import axios from "axios";
 import { AuthContext } from "../../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
-const BASE_URL = import.meta.env.VITE_API_URL;
+import useApiCache from "../../hooks/useApiCache";
 
 const External = () => {
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const menteeId = searchParams.get('menteeId');
+  const userId = menteeId || user?._id;
   
   const [externalData, setExternalData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedSemester, setSelectedSemester] = useState(null);
-  const [availableSemesters, setAvailableSemesters] = useState([1, 2, 3, 4, 5, 6, 7, 8]);
+  const [selectedSemester, setSelectedSemester] = useState(1);
+  const availableSemesters = [1, 2, 3, 4, 5, 6, 7, 8];
 
-  // Get token from local storage - using "token" instead of "accessToken"
-  const token = localStorage.getItem("token");
+  const { data: cachedData, loading, error, invalidate } = useApiCache(
+    userId ? `/students/external/${userId}` : null
+  );
 
-  const fetchExternalData = useCallback(async () => {
-    // Use menteeId from URL params if available, otherwise use logged-in user ID
-    const userId = menteeId || user?._id;
-    
-    if (!userId || !token) {
-      setError("User not authenticated or mentee ID not provided.");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      console.log(`Fetching external marks for user ID: ${userId} (${menteeId ? 'menteeId from URL' : 'logged-in user'})`);
-      
-      const response = await axios.get(
-        `${BASE_URL}/students/external/${userId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-      
-      console.log("Response data:", response.data);
-      
-      if (response.data && response.data.data && response.data.data.external) {
-        const data = response.data.data.external;
+  useEffect(() => {
+    if (cachedData !== undefined) {
+      if (cachedData?.data?.external) {
+        const data = cachedData.data.external;
         if (data.semesters && data.semesters.length > 0) {
           setExternalData(data.semesters);
           setSelectedSemester(data.semesters[0].semester);
         } else {
           setExternalData([data]);
-          setSelectedSemester(1); // Default to first semester
+          setSelectedSemester(1);
         }
       } else {
         setExternalData([]);
-        setSelectedSemester(1); // Default to first semester
+        setSelectedSemester(1);
       }
-
-      setLoading(false);
-    } catch (err) {
-      console.error("Error fetching external marks:", err);
-      
-      // For any error, including 404, just show an empty table
+    } else if (error) {
       setExternalData([{passingDate: null, sgpa: null, subjects: []}]);
-      setSelectedSemester(1); // Default to first semester
-      setLoading(false);
+      setSelectedSemester(1);
     }
-  }, [user, token, menteeId]);
-
-  useEffect(() => {
-    fetchExternalData();
-  }, [fetchExternalData]);
+  }, [cachedData, error]);
 
   const handleSemesterChange = (event) => {
     setSelectedSemester(parseInt(event.target.value, 10));
@@ -92,24 +57,13 @@ const External = () => {
   const getSubjectsForSemester = () => {
     if (!selectedSemester) return [];
     const semesterData = externalData.find((s) => s.semester === selectedSemester);
-    if (!semesterData) return [];
+    if (!semesterData || !semesterData.subjects) return [];
 
     const subjectsMap = new Map();
     semesterData.subjects.forEach((subject) => {
       subjectsMap.set(subject.subjectCode, subject);
     });
     return Array.from(subjectsMap.values());
-  };
-
-  // Get the CGPA for the current semester
-  const getSemesterCGPA = () => {
-    if (!selectedSemester) return null;
-    const semesterData = externalData.find((s) => s.semester === selectedSemester);
-    if (!semesterData || !semesterData.subjects || semesterData.subjects.length === 0) return null;
-    
-    // Get CGPA from the first subject that has it (assuming all subjects in a semester have the same CGPA)
-    const subjectWithCGPA = semesterData.subjects.find(subject => subject.cgpa);
-    return subjectWithCGPA ? subjectWithCGPA.cgpa : null;
   };
 
   return (
@@ -124,7 +78,7 @@ const External = () => {
           <Select
             value={selectedSemester || 1}
             onChange={handleSemesterChange}
-            sx={{ ml: 1 }}
+            sx={{ ml: 1, minWidth: 120 }}
           >
             {availableSemesters.map((sem) => (
               <MenuItem key={sem} value={sem}>
@@ -139,54 +93,30 @@ const External = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                Subject Code
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                Subject Name
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                Internal Marks
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                External Marks
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                Total
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                Attempt
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                Result
-              </TableCell>
-              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>
-                Completion Date
-              </TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>Subject Code</TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>Subject Name</TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>Internal Marks</TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>External Marks</TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>Total</TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>Attempt</TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>Result</TableCell>
+              <TableCell sx={{ border: "1px solid gray", fontWeight: "bold" }}>Completion Date</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {getSubjectsForSemester().length > 0 ? (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={8} align="center" sx={{ py: 3 }}>Loading...</TableCell>
+              </TableRow>
+            ) : getSubjectsForSemester().length > 0 ? (
               getSubjectsForSemester().map((subject) => (
                 <TableRow key={subject.subjectCode}>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.subjectCode}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.subjectName}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.internalMarks ?? "-"}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.externalMarks ?? "-"}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.total ?? "-"}
-                  </TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>
-                    {subject.attempt || "1"}
-                  </TableCell>
+                  <TableCell sx={{ border: "1px solid gray" }}>{subject.subjectCode}</TableCell>
+                  <TableCell sx={{ border: "1px solid gray" }}>{subject.subjectName}</TableCell>
+                  <TableCell sx={{ border: "1px solid gray" }}>{subject.internalMarks ?? "-"}</TableCell>
+                  <TableCell sx={{ border: "1px solid gray" }}>{subject.externalMarks ?? "-"}</TableCell>
+                  <TableCell sx={{ border: "1px solid gray" }}>{subject.total ?? "-"}</TableCell>
+                  <TableCell sx={{ border: "1px solid gray" }}>{subject.attempt || "1"}</TableCell>
                   <TableCell sx={{ 
                     border: "1px solid gray",
                     color: subject.result === "PASS" ? "success.main" : "error.main",
@@ -207,28 +137,17 @@ const External = () => {
               </TableRow>
             )}
             
-            {/* CGPA Row - only show if there's data and a CGPA value */}
             {getSubjectsForSemester().length > 0 && (
               <TableRow>
                 <TableCell 
                   colSpan={8}
                   align="center"
-                  sx={{
-                    border: "1px solid gray",
-                    fontWeight: "bold",
-                    bgcolor: "action.hover"
-                  }}
+                  sx={{ border: "1px solid gray", fontWeight: "bold", bgcolor: "action.hover" }}
                 >
-                  SGPA: {
-                    (() => {
-                      const semesterObj = externalData.find(s => s.semester === selectedSemester);
-                      return semesterObj?.sgpa ?? "-";
-                    })()
-                  }
+                  SGPA: {externalData.find(s => s.semester === selectedSemester)?.sgpa ?? "-"}
                 </TableCell>
               </TableRow>
             )}
-
           </TableBody>
         </Table>
       </TableContainer>

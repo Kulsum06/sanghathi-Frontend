@@ -31,7 +31,11 @@ api.interceptors.response.use(
     const message =
       error.response?.data?.message || "An error occurred. Please try again.";
 
-    return Promise.reject(new Error(message));
+    // Preserve status so callers can check e.g. error.status === 404
+    const enhancedError = new Error(message);
+    enhancedError.status = error.response?.status;
+    enhancedError.response = error.response;
+    return Promise.reject(enhancedError);
   }
 );
 
