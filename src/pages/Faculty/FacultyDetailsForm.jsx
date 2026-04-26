@@ -18,6 +18,7 @@ import {
 } from "../../components/hook-form";
 import RHFUploadAvatar from '../../components/RHFUploadAvatar';
 
+import logger from "../../utils/logger.js";
 const yesNoOptions = [
   { value: "yes", label: "Yes" },
   { value: "no", label: "No" },
@@ -35,10 +36,10 @@ const getCloudinaryPublicId = (url) => {
     if (!matches) return null;
     
     const fullPath = matches[1].replace(/\.[^/.]+$/, '');
-    console.log('[getCloudinaryPublicId] Extracted public ID:', fullPath);
+    logger.info('[getCloudinaryPublicId] Extracted public ID:', fullPath);
     return fullPath;
   } catch (error) {
-    console.error('[getCloudinaryPublicId] Error:', error);
+    logger.error('[getCloudinaryPublicId] Error:', error);
     return null;
   }
 };
@@ -152,7 +153,7 @@ export default function FacultyDetailsForm() {
     try {
       const response = await api.get(`/faculty/profile/${user._id}`);
       const { data } = response.data;
-      console.log(data);
+      logger.info(data);
       
       if (data) {
         data.facultyProfile.dateOfBirth = new Date(data.facultyProfile.dateOfBirth).toISOString().split('T')[0];
@@ -167,9 +168,9 @@ export default function FacultyDetailsForm() {
         });
         setIsDataFetched(true);
       }
-      console.log("Faculty data fetched successfully:", data);
+      logger.info("Faculty data fetched successfully:", data);
     } catch (error) {
-      console.error("Error fetching Faculty data:", error.response || error);
+      logger.error("Error fetching Faculty data:", error.response || error);
     }
   }, [user._id, setValue]);
 
@@ -203,15 +204,15 @@ export default function FacultyDetailsForm() {
             if (publicId) {
               try {
                 await api.delete(`v1/upload/profile-image/${encodeURIComponent(publicId)}`);
-                console.log('[Image Delete] Old image deleted');
+                logger.info('[Image Delete] Old image deleted');
               } catch (deleteError) {
-                console.error('[Image Delete] Error:', deleteError);
+                logger.error('[Image Delete] Error:', deleteError);
               }
             }
           }
   
           // Upload new image
-          console.log('[Image Upload] Starting upload');
+          logger.info('[Image Upload] Starting upload');
           const uploadResponse = await api.post('v1/upload/profile-image', {
             image: currentPhoto
           });
@@ -224,7 +225,7 @@ export default function FacultyDetailsForm() {
           photoUrl = cloudinaryUrl;
   
         } catch (error) {
-          console.error('[Image Upload] Error:', error);
+          logger.error('[Image Upload] Error:', error);
           enqueueSnackbar('Failed to upload photo', { variant: 'error' });
           return;
         }
@@ -246,50 +247,11 @@ export default function FacultyDetailsForm() {
         throw new Error('Profile update failed');
       }
     } catch (error) {
-      console.error("[FacultyDetailsForm] Error:", error);
+      logger.error("[FacultyDetailsForm] Error:", error);
       enqueueSnackbar(error.response?.data?.message || "Error updating profile", {
         variant: "error",
       });
     }
-  };
-
-  const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          // Calculate new dimensions
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Get the compressed base64 string
-          const dataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(dataUrl);
-        };
-      };
-    });
   };
 
   const handleDropAvatar = useCallback(
@@ -302,7 +264,7 @@ export default function FacultyDetailsForm() {
           setValue('facultyProfile.photo', compressedBase64);
           trigger('facultyProfile.photo');
         } catch (error) {
-          console.error("Error processing image:", error);
+          logger.error("Error processing image:", error);
           enqueueSnackbar("Error processing image", { variant: "error" });
         }
       }
@@ -312,9 +274,16 @@ export default function FacultyDetailsForm() {
 
   return (
     <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
-      <Grid container spacing={2}>
+      <Grid container spacing={{ xs: 2, md: 3 }}>
         <Grid item xs={12} md={4}>
-          <Card sx={{ height: "100%", py: 10, px: 3, textAlign: "center" }}>
+          <Card
+            sx={{
+              height: "100%",
+              py: { xs: 4, sm: 7, md: 10 },
+              px: { xs: 2, sm: 3 },
+              textAlign: "center",
+            }}
+          >
             <RHFUploadAvatar
               name="facultyProfile.photo"
               accept="image/*"
@@ -329,8 +298,8 @@ export default function FacultyDetailsForm() {
           </Card>
         </Grid>
         <Grid item xs={12} md={8}>
-          <Card sx={{ p: 3 }}>
-            <Stack spacing={3} sx={{ mt: 3 }}>
+          <Card sx={{ p: { xs: 2, sm: 3 } }}>
+            <Stack spacing={{ xs: 2, sm: 3 }} sx={{ mt: { xs: 1, sm: 3 } }}>
               <RHFTextField
                 name="facultyProfile.fullName.firstName"
                 label="First Name"
@@ -382,9 +351,9 @@ export default function FacultyDetailsForm() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={12}>
-          <Card sx={{ p: 3 }}>
-            <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <Card sx={{ p: { xs: 2, sm: 3 } }}>
+            <Grid container spacing={{ xs: 2, md: 3 }}>
               <Grid item xs={12} md={6}>
                 <RHFTextField
                   name="facultyProfile.email"
@@ -512,12 +481,20 @@ export default function FacultyDetailsForm() {
                 </RHFSelect>
               </Grid>
             </Grid>
-            <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
-              <Box display="flex" gap={1}>
+            <Stack spacing={2} alignItems={{ xs: "stretch", sm: "flex-end" }} sx={{ mt: 3 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 1,
+                  width: { xs: "100%", sm: "auto" },
+                  flexDirection: { xs: "column-reverse", sm: "row" },
+                }}
+              >
                 {import.meta.env.MODE === "development" && (
                   <LoadingButton
                     variant="outlined"
                     onClick={handleReset}
+                    sx={{ width: { xs: "100%", sm: "auto" } }}
                   >
                     Reset
                   </LoadingButton>
@@ -526,6 +503,7 @@ export default function FacultyDetailsForm() {
                   type="submit"
                   variant="contained"
                   loading={isSubmitting}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
                 >
                   Save
                 </LoadingButton>

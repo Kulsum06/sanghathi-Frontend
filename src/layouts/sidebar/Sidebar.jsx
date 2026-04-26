@@ -5,7 +5,7 @@ import SidebarDrawer from "./SidebarDrawer";
 import NavItemsList from "./NavItemsList";
 import FlexBetween from "../../components/FlexBetween";
 import logo from "../../public/logo.svg";
-import { Box, IconButton, useTheme, Typography } from "@mui/material";
+import { Box, IconButton, useTheme } from "@mui/material";
 import { ChevronLeft } from "@mui/icons-material";
 import { AuthContext } from "../../context/AuthContext";
 
@@ -36,7 +36,10 @@ const Sidebar = ({
   const navConfig = getNavConfig(user?.roleName);
 
   return (
-    <Box component="nav">
+    <Box
+      component="nav"
+      sx={{ width: isNonMobile ? drawerWidth : 0, flexShrink: { sm: 0 } }}
+    >
       {isSidebarOpen && (
         <SidebarDrawer
           isSidebarOpen={isSidebarOpen}
@@ -50,8 +53,10 @@ const Sidebar = ({
               alt="CMRIT Logo"
               style={{
                 filter: "none",
-                margin: "20px 5px",
-                width: "145px",
+                margin: isNonMobile ? "16px 5px" : "20px 8px",
+                width: isNonMobile ? "145px" : "110px",
+                maxWidth: "100%",
+                transition: "width 0.2s ease",
               }}
             />
           </Box>

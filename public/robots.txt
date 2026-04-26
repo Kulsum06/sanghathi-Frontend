@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sanghathi.com/sitemap.xml
+Host: https://sanghathi.com

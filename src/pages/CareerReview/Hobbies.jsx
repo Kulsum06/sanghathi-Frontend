@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useCallback } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm } from "react-hook-form";
@@ -8,6 +8,7 @@ import { LoadingButton } from "@mui/lab";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
 const defaultValues = {
   hobby: "",
@@ -44,26 +45,39 @@ export default function Hobbies() {
         Object.keys(defaultValues).forEach((key) => {
           setValue(key, hobbies[key] || "");
         });
+      } else {
+        logger.warn("No hobbies data found for this user.");
       }
     }
   }, [data, setValue]);
 
   useEffect(() => {
-    if (error) enqueueSnackbar("Error fetching hobbies data", { variant: "error" });
+    if (error) {
+      logger.error("Error fetching hobbies data:", error);
+      enqueueSnackbar("Error fetching hobbies data", { variant: "error" });
+    }
   }, [error, enqueueSnackbar]);
 
   const onSubmit = async (formData) => {
     try {
-      await api.post("/hobbies-data/hobbies", { ...formData, userId: user._id });
+      if (!user?._id) {
+        enqueueSnackbar("User information not available", { variant: "error" });
+        return;
+      }
+      
+      logger.info("Saving hobbies for user:", userId);
+      await api.post("/hobbies-data/hobbies", { ...formData, userId: menteeId || user._id });
+      
       enqueueSnackbar("Hobbies updated successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
+      logger.error("Error saving hobbies data:", err);
       enqueueSnackbar("An error occurred while processing the request", { variant: "error" });
     }
   };
 
   return (
-    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} disableAutoDraft>
       <Grid container spacing={2}>
         <Grid item xs={12}>
           <Card sx={{ p: 3 }}>
@@ -100,9 +114,7 @@ export default function Hobbies() {
 
               <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
                 <Box display="flex" gap={1}>
-                  {import.meta.env.MODE === "development" && (
-                    <LoadingButton variant="outlined" onClick={() => reset(defaultValues)}>Reset</LoadingButton>
-                  )}
+                  <LoadingButton variant="outlined" onClick={() => reset(defaultValues)}>Reset</LoadingButton>
                   <LoadingButton type="submit" variant="contained" loading={isSubmitting || loading}>Save</LoadingButton>
                 </Box>
               </Stack>

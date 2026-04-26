@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Box, Typography, Avatar } from '@mui/material';
 import { useSnackbar } from 'notistack';
 
+import logger from "../utils/logger.js";
 export default function RHFUploadAvatar({ name, value, onChange, ...other }) {
   const { enqueueSnackbar } = useSnackbar();
   const [preview, setPreview] = useState(null);
@@ -58,7 +59,7 @@ export default function RHFUploadAvatar({ name, value, onChange, ...other }) {
           // Just pass the base64 data to parent component
           onChange(base64Data);
         } catch (error) {
-          console.error('Error processing file:', error);
+          logger.error('Error processing file:', error);
           enqueueSnackbar('Failed to process image', { variant: 'error' });
         }
       };
@@ -69,7 +70,7 @@ export default function RHFUploadAvatar({ name, value, onChange, ...other }) {
 
       reader.readAsDataURL(file);
     } catch (error) {
-      console.error('Error processing file:', error);
+      logger.error('Error processing file:', error);
       enqueueSnackbar('Failed to process image', { variant: 'error' });
     }
   }, [onChange, enqueueSnackbar]);

@@ -1,63 +1,101 @@
 import { useState } from "react";
-import { Box, Button, Container, TextField, Typography, CircularProgress } from "@mui/material";
+import {
+  Box,
+  Button,
+  Card,
+  CircularProgress,
+  Container,
+  Link,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import Page from "../components/Page";
-import axios from "axios";
+import api from "../utils/axios";
 
-const ForgotPassword = () => {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
+import logger from "../utils/logger.js";
+
+export default function ForgotPassword() {
   const { enqueueSnackbar } = useSnackbar();
+  const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!email.trim()) {
+      enqueueSnackbar("Please enter your email address.", { variant: "warning" });
+      return;
+    }
 
     try {
-    await axios.post(`${import.meta.env.VITE_API_URL}/users/forgotPassword`, { email });
-      enqueueSnackbar("Password reset link sent to your email!", { variant: "success" });
-    } catch (err) {
-      enqueueSnackbar(err.response?.data?.message || "Something went wrong", { variant: "error" });
+      setIsSubmitting(true);
+      await api.post("/users/forgotPassword", { email: email.trim() });
+      setIsSubmitted(true);
+      enqueueSnackbar(
+        "If an account exists with this email, a reset link has been sent.",
+        { variant: "success" }
+      );
+    } catch (error) {
+      logger.error("Forgot password request failed", error);
+      enqueueSnackbar(
+        error.message || "Unable to send reset link. Please try again.",
+        { variant: "error" }
+      );
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
     <Page title="Forgot Password">
-      <Container maxWidth="sm">
-        <Box
-          component="form"
-          onSubmit={handleSubmit}
-          sx={{ mt: 8, display: "flex", flexDirection: "column", gap: 3 }}
-        >
-          <Typography variant="h4" align="center">Forgot Password</Typography>
-          <Typography variant="body1" align="center">
-            Enter your email address and we'll send you a link to reset your password.
-          </Typography>
+      <Container maxWidth="sm" sx={{ py: { xs: 6, md: 10 } }}>
+        <Card sx={{ p: { xs: 3, md: 4 } }}>
+          <Stack spacing={3} component="form" onSubmit={handleSubmit}>
+            <Typography variant="h4">Forgot Password</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Enter your account email and we will send a password reset link.
+            </Typography>
 
-          <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            fullWidth
-          />
+            <TextField
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              fullWidth
+              required
+              disabled={isSubmitting}
+            />
 
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : null}
-          >
-            {loading ? "Sending..." : "Send Reset Link"}
-          </Button>
-        </Box>
+            {isSubmitted && (
+              <Box>
+                <Typography variant="body2" color="success.main">
+                  Request received. Check your inbox for the reset link.
+                </Typography>
+              </Box>
+            )}
+
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={18} /> : null}
+            >
+              {isSubmitting ? "Sending..." : "Send Reset Link"}
+            </Button>
+
+            <Box>
+              <Link component={RouterLink} to="/login" underline="hover">
+                Back to Sign In
+              </Link>
+            </Box>
+          </Stack>
+        </Card>
       </Container>
     </Page>
   );
-};
-
-
-export default ForgotPassword;
+}

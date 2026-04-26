@@ -14,7 +14,7 @@ export default function ChatMessageList({ conversation, messages }) {
     if (scrollRef.current) {
       scrollRef.current.scrollToBottom();
     }
-  }, [conversation.messages]);
+  }, [messages]);
 
   return (
     <>

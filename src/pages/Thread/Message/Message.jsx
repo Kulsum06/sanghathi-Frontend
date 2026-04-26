@@ -3,19 +3,48 @@ import { styled } from "@mui/system";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Box, Avatar, Typography } from "@mui/material";
 import { Stack, Input, Divider, IconButton } from "@mui/material";
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
 
 import Iconify from "../../../components/Iconify";
 import Scrollbar from "../../../components/Scrollbar";
 
 import { AuthContext } from "../../../context/AuthContext";
+import {
+  getAvatarSrc,
+  getAvatarFallbackText,
+} from "../../../utils/avatarResolver";
 
 const ContentStyle = styled("div")(({ theme }) => ({
-  maxWidth: 380,
+  display: "inline-block",
+  maxWidth: "min(75vw, 420px)",
   padding: theme.spacing(1.5),
-  borderRadius: theme.shape.borderRadius,
+  borderRadius: 14,
   backgroundColor: theme.palette.grey[500_12],
   color: theme.palette.text.primary,
+  border: `1px solid ${theme.palette.divider}`,
 }));
+
+const formatMessageAge = (createdAt) => {
+  const rawLabel = formatDistanceToNowStrict(new Date(createdAt || Date.now()), {
+    addSuffix: true,
+  });
+
+  return rawLabel
+    .replace(" seconds", "s")
+    .replace(" second", "s")
+    .replace(" minutes", "m")
+    .replace(" minute", "m")
+    .replace(" hours", "h")
+    .replace(" hour", "h")
+    .replace(" days", "d")
+    .replace(" day", "d")
+    .replace(" weeks", "w")
+    .replace(" week", "w")
+    .replace(" months", "mo")
+    .replace(" month", "mo")
+    .replace(" years", "y")
+    .replace(" year", "y");
+};
 
 const MessageItem = ({ message, conversation }) => {
   const { user } = useContext(AuthContext);
@@ -24,16 +53,31 @@ const MessageItem = ({ message, conversation }) => {
     marginBottom: theme.spacing(3),
   }));
 
-  //FIXME : Remove the hardcoded value
+  const participants = Array.isArray(conversation?.participants)
+    ? conversation.participants
+    : [];
 
-  const sender = conversation.participants.find(
-    (participant) => participant._id === message.senderId
-  );
+  const messageSenderId =
+    message?.senderId?._id ||
+    message?.sender?._id ||
+    message?.senderId ||
+    message?.sender;
 
-  const isMe = message.senderId === user._id;
+  const normalizedSenderId = String(messageSenderId || "");
+  const normalizedCurrentUserId = String(user?._id || "");
+
+  const sender =
+    participants.find(
+      (participant) => String(participant?._id || "") === normalizedSenderId
+    ) ||
+    message?.sender ||
+    null;
+
+  const isMe = normalizedSenderId === normalizedCurrentUserId;
   const justifyContent = isMe ? "flex-end" : "flex-start";
 
   const firstName = sender?.name && sender.name.split(" ")[0];
+  const senderAvatarSrc = getAvatarSrc(sender);
 
   return (
     <RootStyle>
@@ -41,37 +85,78 @@ const MessageItem = ({ message, conversation }) => {
         sx={{
           display: "flex",
           justifyContent,
+          alignItems: "flex-end",
+          gap: 1,
         }}
       >
         {!isMe && (
           <Avatar
             alt={sender?.name}
-            src={sender?.avatar}
-            sx={{ width: 32, height: 32, mr: 2 }}
-          />
+            src={senderAvatarSrc || undefined}
+            sx={{ width: 32, height: 32 }}
+          >
+            {!senderAvatarSrc ? getAvatarFallbackText(sender?.name) : null}
+          </Avatar>
         )}
 
-        <div>
+        <Box
+          sx={{
+            display: "inline-flex",
+            flexDirection: "column",
+            alignItems: isMe ? "flex-end" : "flex-start",
+            maxWidth: "min(75vw, 420px)",
+          }}
+        >
           <ContentStyle
             sx={{
-              ...(isMe && { color: "grey.800", bgcolor: "primary.lighter" }),
+              ...(isMe
+                ? {
+                    color: "primary.contrastText",
+                    bgcolor: "primary.main",
+                    borderColor: "primary.main",
+                    borderTopRightRadius: 6,
+                  }
+                : {
+                    borderTopLeftRadius: 6,
+                  }),
             }}
           >
             <Typography variant="body2">{message.body}</Typography>
           </ContentStyle>
-          <Typography
-            variant="caption"
+          <Box
             sx={{
-              mt: 0.5,
-              textAlign: isMe ? "right" : "left",
+              mt: 0.75,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: isMe ? "flex-end" : "flex-start",
+              gap: 0.75,
             }}
           >
-            {!isMe && `${firstName}, `}
-            {formatDistanceToNowStrict(new Date(message.createdAt), {
-              addSuffix: true,
-            })}
-          </Typography>
-        </div>
+            {!isMe && firstName ? (
+              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                {firstName}
+              </Typography>
+            ) : null}
+            <Box
+              component="span"
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.4,
+                px: 0.8,
+                py: 0.2,
+                borderRadius: 999,
+                bgcolor: "action.hover",
+                color: "text.secondary",
+              }}
+            >
+              <AccessTimeRoundedIcon sx={{ fontSize: 12 }} />
+              <Typography component="span" variant="caption" sx={{ lineHeight: 1.2 }}>
+                {formatMessageAge(message.createdAt)}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
       </Box>
     </RootStyle>
   );
@@ -84,7 +169,7 @@ export function MessageList({ conversation, messages }) {
     if (scrollRef.current) {
       scrollRef.current.scrollToBottom();
     }
-  }, [conversation.messages]);
+  }, [messages]);
 
   return (
     <>

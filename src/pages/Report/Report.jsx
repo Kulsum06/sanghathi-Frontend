@@ -11,6 +11,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Paper,
   Container,
   Tooltip,
@@ -44,45 +45,21 @@ import { alpha, useTheme } from "@mui/material/styles";
 
 import Page from "../../components/Page";
 import api from "../../utils/axios"; // replace with your actual API path
-import axios from "axios";
 import { useSnackbar } from "notistack";
 import { MessageList } from "../Thread/Message/Message";
+import {
+  getAvatarSrc,
+  getAvatarFallbackText,
+} from "../../utils/avatarResolver";
+import useResponsive from "../../hooks/useResponsive";
 
 const baseURL = import.meta.env.VITE_PYTHON_API;
 
-import processTableData from "./ExportToExcel";
-
-/* 
-TODO : The export to excel button should be on the right side
-
-On top of the card there should be a filter form 
-
-New Features for data filt:
-
-
-Add a search bar which should be able to display only the rows that contains the user
-add sort by open and close
-Add date fileter with from and to date
-add sort option for date
-Add filter for category
-
-*/
-
-/*
-
-Excel report :
-
-The header should be marked bold, with a sticky header and it should have a color,
-Remove the _id and _v field from the data,
-date should be an excel date format,
-Excel file name should be a timestamp
-participant name should be there as comma seperate list
-
-
-*/
+import logger from "../../utils/logger.js";
 const Report = () => {
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
+  const isMobile = useResponsive("down", "sm");
   const [threads, setThreads] = useState([]);
   const [openDialogThreadId, setOpenDialogThreadId] = useState(null);
   const [openChatDialogThreadId, setOpenChatDialogThreadId] = useState(null);
@@ -91,8 +68,11 @@ const Report = () => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("Closed");
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedSemester, setSelectedSemester] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const { enqueueSnackbar } = useSnackbar();
 
   // Get the color based on the current theme mode
@@ -101,33 +81,32 @@ const Report = () => {
   useEffect(() => {
     const fetchThreads = async () => {
       try {
-        const response = await api.get("threads");
+        const response = await api.get("threads", {
+          params: {
+            page: 1,
+            limit: 300,
+          },
+        });
         if (response.status === 200) {
           const { data } = response.data;
-          console.log("All threads:", data.threads);
-          console.log("Thread statuses:", data.threads.map(t => t.status));
+          logger.info("All threads:", data.threads);
+          logger.info("Thread statuses:", data.threads.map(t => t.status));
           setThreads(data.threads);
         }
       } catch (error) {
-        console.error(error);
+        logger.error(error);
       }
     };
 
     fetchThreads();
   }, []);
 
-  useEffect(() => {
-    setThreads([...threads]);
-  }, [fromDate, toDate]);
-
   const handleFromDateChange = (event) => {
     setFromDate(event.target.value);
-    setThreads([...threads]);
   };
 
   const handleToDateChange = (event) => {
     setToDate(event.target.value);
-    setThreads([...threads]);
   };
 
   const handleCategoryChange = (event) => {
@@ -137,6 +116,40 @@ const Report = () => {
   const handleStatusChange = (event) => {
     setSelectedStatus(event.target.value);
   };
+
+  const handleSemesterChange = (event) => {
+    setSelectedSemester(event.target.value);
+  };
+
+  const getThreadSemesters = (thread) => {
+    const participants = Array.isArray(thread?.participants)
+      ? thread.participants
+      : [];
+
+    return participants
+      .map(
+        (participant) =>
+          participant?.profile?.sem ||
+          participant?.sem ||
+          participant?.semester ||
+          participant?.studentProfile?.sem
+      )
+      .filter(Boolean)
+      .map((semValue) => String(semValue).trim());
+  };
+
+  const semesterOptions = Array.from(
+    new Set(
+      threads.flatMap((thread) => getThreadSemesters(thread))
+    )
+  ).sort((a, b) => {
+    const semA = Number(a);
+    const semB = Number(b);
+    if (Number.isNaN(semA) || Number.isNaN(semB)) {
+      return String(a).localeCompare(String(b));
+    }
+    return semA - semB;
+  });
 
   const toggleFilters = () => {
     setShowFilters(!showFilters);
@@ -182,6 +195,10 @@ const Report = () => {
 
     const categoryMatches =
       !selectedCategory || thread.topic === selectedCategory;
+
+    const threadSemesters = getThreadSemesters(thread);
+    const semesterMatches =
+      !selectedSemester || threadSemesters.includes(String(selectedSemester));
     
     // Normalize the selected status for comparison
     const normalizedSelectedStatus = selectedStatus ? selectedStatus.toLowerCase().trim() : '';
@@ -190,6 +207,8 @@ const Report = () => {
     if (normalizedSelectedStatus === 'open') {
       // If "Open" is selected, show both "open" and "in progress" threads
       statusMatches = normalizedStatus === 'open' || normalizedStatus === 'in progress';
+    } else if (normalizedSelectedStatus === 'in progress') {
+      statusMatches = normalizedStatus === 'in progress';
     } else if (normalizedSelectedStatus === 'closed') {
       statusMatches = normalizedStatus === 'closed';
     }
@@ -201,7 +220,7 @@ const Report = () => {
 
     // If search term is empty, show all matching threads
     if (!searchTerm) {
-      return dateMatches && categoryMatches && statusMatches;
+      return dateMatches && categoryMatches && semesterMatches && statusMatches;
     }
 
     // If search term exists, check for matches
@@ -209,9 +228,28 @@ const Report = () => {
       (hasMatchingParticipant || hasMatchingTitle) &&
       dateMatches &&
       categoryMatches &&
+      semesterMatches &&
       statusMatches
     );
   });
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, fromDate, toDate, selectedCategory, selectedStatus, selectedSemester]);
+
+  const paginatedThreads = filteredThreads.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const handleChangePage = (_event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
@@ -228,13 +266,18 @@ const Report = () => {
   const handleOpenChatDialog = async (threadId) => {
     setOpenChatDialogThreadId(threadId);
     try {
-      const response = await api.get(`/threads/${threadId}`);
+      const response = await api.get(`/threads/${threadId}`, {
+        params: {
+          messagePage: 1,
+          messageLimit: 150,
+        },
+      });
       if (response.status === 200) {
         const { data } = response.data;
         setChatMessages(data.thread.messages);
       }
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       enqueueSnackbar("Error loading chat messages", { variant: "error" });
     }
   };
@@ -335,7 +378,7 @@ const Report = () => {
         }
       });
     } catch (error) {
-      console.error("Error exporting to Excel:", error);
+      logger.error("Error exporting to Excel:", error);
       enqueueSnackbar("Error exporting report", { 
         variant: "error",
         anchorOrigin: {
@@ -351,16 +394,20 @@ const Report = () => {
     setFromDate("");
     setToDate("");
     setSelectedCategory("");
-    setSelectedStatus("Closed");
+    setSelectedStatus("");
+    setSelectedSemester("");
   };
 
   return (
     <Page title="Thread">
-      <Container maxWidth="xl" sx={{ overflowX: "hidden", overflowY: "auto" }}>
+      <Container
+        maxWidth="xl"
+        sx={{ px: { xs: 1.5, sm: 3 }, overflowX: "hidden", overflowY: "auto" }}
+      >
         <Paper
           elevation={0}
           sx={{
-            p: 3,
+            p: { xs: 2, sm: 3 },
             mt: 2,
             mb: 4,
             borderRadius: 2,
@@ -382,6 +429,7 @@ const Report = () => {
             <Typography 
               variant="h4"
               sx={{
+                fontSize: { xs: "1.65rem", sm: "2.125rem" },
                 fontWeight: 'bold',
                 background: isLight 
                   ? `-webkit-linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
@@ -441,7 +489,8 @@ const Report = () => {
               direction="row" 
               spacing={1}
               sx={{ 
-                flexWrap: 'nowrap',
+                flexWrap: 'wrap',
+                rowGap: 1,
                 justifyContent: { xs: 'space-between', sm: 'flex-end' }
               }}
             >
@@ -453,7 +502,8 @@ const Report = () => {
                 size="small"
                 sx={{
                   borderRadius: 2,
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  width: { xs: 'calc(50% - 4px)', sm: 'auto' },
                 }}
               >
                 {showFilters ? 'Hide Filters' : 'Show Filters'}
@@ -467,7 +517,8 @@ const Report = () => {
                 size="small"
                 sx={{
                   borderRadius: 2,
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  width: { xs: 'calc(50% - 4px)', sm: 'auto' },
                 }}
               >
                 Export to Excel
@@ -498,7 +549,7 @@ const Report = () => {
                 <Typography variant="subtitle1" fontWeight="medium">
                   Filter Options
                 </Typography>
-                {(selectedCategory || selectedStatus || fromDate || toDate) && (
+                {(selectedCategory || selectedStatus || selectedSemester || fromDate || toDate) && (
                   <Button 
                     variant="text" 
                     color="error" 
@@ -537,6 +588,7 @@ const Report = () => {
                   >
                     <MenuItem value="">All</MenuItem>
                     <MenuItem value="Open">Open</MenuItem>
+                    <MenuItem value="In Progress">In Progress</MenuItem>
                     <MenuItem value="Closed">Closed</MenuItem>
                   </TextField>
                 </Grid>
@@ -565,13 +617,31 @@ const Report = () => {
                     }}
                   >
                     <MenuItem value="">All Categories</MenuItem>
-                    {[...new Set(threads.map((thread) => thread.topic))].map(
+                    {[...new Set(threads.map((thread) => thread.topic).filter(Boolean))].map(
                       (topic, index) => (
                         <MenuItem key={index} value={topic}>
                           {topic || "Uncategorized"}
                         </MenuItem>
                       )
                     )}
+                  </TextField>
+                </Grid>
+
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Semester"
+                    value={selectedSemester}
+                    onChange={handleSemesterChange}
+                  >
+                    <MenuItem value="">All Semesters</MenuItem>
+                    {semesterOptions.map((semester) => (
+                      <MenuItem key={semester} value={semester}>
+                        Sem {semester}
+                      </MenuItem>
+                    ))}
                   </TextField>
                 </Grid>
 
@@ -632,18 +702,20 @@ const Report = () => {
 
           <Box sx={{ position: 'relative' }}>
             {filteredThreads.length > 0 ? (
-              <TableContainer 
-                component={Paper} 
-                sx={{ 
-                  borderRadius: 2,
-                  boxShadow: 'none',
-                  border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
-                  overflow: 'hidden',
-                  maxWidth: '100%',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                <Table sx={{ minWidth: 650 }}>
+              <>
+                <TableContainer 
+                  component={Paper} 
+                  sx={{ 
+                    borderRadius: 2,
+                    boxShadow: 'none',
+                    border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                    overflowX: 'auto',
+                    overflowY: 'hidden',
+                    maxWidth: '100%',
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  <Table sx={{ minWidth: { xs: 980, md: 740 } }}>
                   <TableHead sx={{ 
                     backgroundColor: isLight 
                       ? alpha(theme.palette.primary.main, 0.08) 
@@ -665,7 +737,10 @@ const Report = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredThreads.map((thread) => (
+                    {paginatedThreads.map((thread) => {
+                      const authorAvatarSrc = getAvatarSrc(thread?.author);
+
+                      return (
                       <TableRow 
                         key={thread._id}
                         hover
@@ -687,7 +762,7 @@ const Report = () => {
                           <Box
                             sx={{
                               maxHeight: "4rem",
-                              maxWidth: "15rem",
+                              maxWidth: { xs: "11rem", md: "15rem" },
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                             }}
@@ -725,6 +800,7 @@ const Report = () => {
                           <Dialog
                             open={openDialogThreadId === thread._id}
                             onClose={handleCloseDialog}
+                            fullScreen={isMobile}
                             PaperProps={{
                               sx: {
                                 borderRadius: 2,
@@ -802,6 +878,7 @@ const Report = () => {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <Avatar 
+                              src={authorAvatarSrc || undefined}
                               sx={{ 
                                 width: 28, 
                                 height: 28,
@@ -812,7 +889,9 @@ const Report = () => {
                                 mr: 1
                               }}
                             >
-                              {thread?.author?.name?.[0] || "?"}
+                              {!authorAvatarSrc
+                                ? getAvatarFallbackText(thread?.author?.name)
+                                : null}
                             </Avatar>
                             <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>
                               {thread?.author?.name || "Unknown"}
@@ -833,28 +912,38 @@ const Report = () => {
                               },
                             }}
                           >
-                            {thread.participants.map((participant, idx) => (
+                            {thread.participants.map((participant, idx) => {
+                              const participantAvatarSrc = getAvatarSrc(participant);
+
+                              return (
                               <Tooltip
                                 key={idx}
                                 title={participant.name}
                                 placement="top"
                               >
-                                <Avatar alt={participant.name}>
-                                  {participant.name[0]}
+                                <Avatar
+                                  alt={participant.name}
+                                  src={participantAvatarSrc || undefined}
+                                >
+                                  {!participantAvatarSrc
+                                    ? getAvatarFallbackText(participant.name)
+                                    : null}
                                 </Avatar>
                               </Tooltip>
-                            ))}
+                              );
+                            })}
                           </AvatarGroup>
                         </TableCell>
                         <TableCell>
                           <Button
                             variant="outlined"
-                            size="small"
-                            startIcon={<ChatIcon />}
+                            size={isMobile ? "small" : "medium"}
+                            startIcon={!isMobile ? <ChatIcon /> : null}
                             onClick={() => handleOpenChatDialog(thread._id)}
                             sx={{
                               borderRadius: 2,
                               textTransform: 'none',
+                              whiteSpace: 'nowrap',
                               color: isLight ? theme.palette.primary.main : theme.palette.info.main,
                               borderColor: isLight ? theme.palette.primary.main : theme.palette.info.main,
                               '&:hover': {
@@ -868,10 +957,21 @@ const Report = () => {
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
-                </Table>
-              </TableContainer>
+                  </Table>
+                </TableContainer>
+                <TablePagination
+                  component="div"
+                  count={filteredThreads.length}
+                  page={page}
+                  rowsPerPage={rowsPerPage}
+                  onPageChange={handleChangePage}
+                  onRowsPerPageChange={handleChangeRowsPerPage}
+                  rowsPerPageOptions={isMobile ? [10, 25] : [10, 25, 50]}
+                />
+              </>
             ) : (
               <Box 
                 sx={{ 
@@ -888,7 +988,7 @@ const Report = () => {
                 <Typography variant="body2" color="text.secondary">
                   Try adjusting your filters or search terms
                 </Typography>
-                {(selectedCategory || selectedStatus || fromDate || toDate || searchTerm) && (
+                {(selectedCategory || selectedStatus || selectedSemester || fromDate || toDate || searchTerm) && (
                   <Button 
                     variant="outlined" 
                     color={isLight ? "primary" : "info"}
@@ -908,6 +1008,7 @@ const Report = () => {
         <Dialog
           open={Boolean(openChatDialogThreadId)}
           onClose={handleCloseChatDialog}
+          fullScreen={isMobile}
           maxWidth="md"
           fullWidth
           PaperProps={{

@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useCallback } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -9,6 +9,7 @@ import { Delete as DeleteIcon } from "@mui/icons-material";
 import { FormProvider, RHFTextField, RHFSelect } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
 const placementType = [
   { label: "In-Campus", value: "In-Campus" },
@@ -44,6 +45,7 @@ export default function PlacementDetails() {
 
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
+      logger.error("Form errors:", errors);
       enqueueSnackbar("Please fill all required fields", { variant: "error" });
     }
   }, [errors, enqueueSnackbar]);
@@ -60,6 +62,7 @@ export default function PlacementDetails() {
         }));
         reset({ placements: formatted });
       } else {
+        logger.warn("No placement data found for this user");
         reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] });
       }
     }
@@ -67,6 +70,7 @@ export default function PlacementDetails() {
 
   useEffect(() => {
     if (error) {
+      logger.error("Error fetching placement data:", error);
       enqueueSnackbar("Failed to fetch placement data", { variant: "error" });
       reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] });
     }
@@ -84,16 +88,20 @@ export default function PlacementDetails() {
     try {
       if (!user?._id) { enqueueSnackbar("User information not available", { variant: "error" }); return; }
       if (!validatePlacements(formData)) return;
+      
+      logger.info("Saving placement details for user:", userId);
       await api.post("/placement", { placements: formData.placements, userId: menteeId || user._id });
+      
       enqueueSnackbar("Placement details saved successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
+      logger.error("Error saving placement details:", err);
       enqueueSnackbar(err.message || "An error occurred while processing the request", { variant: "error" });
     }
   };
 
   return (
-    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} disableAutoDraft>
       <Card sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>Placement Details</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Fields marked with * are required</Typography>
@@ -119,7 +127,14 @@ export default function PlacementDetails() {
                       <RHFTextField name={`placements[${index}].placedSemester`} label="Placed Semester" fullWidth required />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <RHFTextField name={`placements[${index}].dateOfSelection`} label="Date of Selection" type="date" fullWidth InputLabelProps={{ shrink: true }} required />
+                      <RHFTextField 
+                        name={`placements[${index}].dateOfSelection`} 
+                        label="Date of Selection" 
+                        type="date" 
+                        fullWidth 
+                        InputLabelProps={{ shrink: true }} 
+                        required 
+                      />
                     </Grid>
                     <Grid item xs={12} md={6}>
                       <RHFSelect name={`placements[${index}].type`} label="Type" fullWidth required>
@@ -139,15 +154,33 @@ export default function PlacementDetails() {
           ))}
 
           <Grid item xs={12}>
-            <Button variant="contained" color={isLight ? "primary" : "info"} onClick={() => append({ ...DEFAULT_EMPTY_PLACEMENT })} sx={{ mt: 2, display: "block", mx: "auto" }}>
+            <Button 
+              variant="contained" 
+              color={theme.palette.mode === 'light' ? "primary" : "info"} 
+              onClick={() => append({ ...DEFAULT_EMPTY_PLACEMENT })} 
+              sx={{ mt: 2, display: "block", mx: "auto" }}
+            >
               Add Company
             </Button>
           </Grid>
           <Grid item xs={12}>
             <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
               <Box display="flex" gap={1}>
-                <LoadingButton variant="outlined" color={isLight ? "primary" : "info"} onClick={() => reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] })}>Reset</LoadingButton>
-                <LoadingButton type="submit" variant="contained" color={isLight ? "primary" : "info"} loading={isSubmitting || loading}>Save</LoadingButton>
+                <LoadingButton 
+                  variant="outlined" 
+                  color={theme.palette.mode === 'light' ? "primary" : "info"} 
+                  onClick={() => reset({ placements: [{ ...DEFAULT_EMPTY_PLACEMENT }] })}
+                >
+                  Reset
+                </LoadingButton>
+                <LoadingButton 
+                  type="submit" 
+                  variant="contained" 
+                  color={theme.palette.mode === 'light' ? "primary" : "info"} 
+                  loading={isSubmitting || loading}
+                >
+                  Save
+                </LoadingButton>
               </Box>
             </Stack>
           </Grid>

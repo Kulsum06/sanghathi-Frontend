@@ -1,10 +1,10 @@
 import axios from "axios";
 import { BASE_URL } from "./config";
+import trackedFetch from "./utils/trackedFetch";
 
 export const loginCall = async (userCredential, dispatch) => {
   dispatch({ type: "LOGIN_START" });
   try {
-    console.log("Attempting login with URL:", `${BASE_URL}/users/login`);
     const res = await axios.post(`${BASE_URL}/users/login`, userCredential);
     
     if (userCredential.college) {
@@ -21,24 +21,24 @@ export const loginCall = async (userCredential, dispatch) => {
     dispatch({ type: "LOGIN_SUCCESS", payload: res.data.data.user });
     return res.data; 
   } catch (err) {
-    console.error("Login error:", err);
     dispatch({ type: "LOGIN_FAILURE", payload: err });
     throw err;
   }
-};export async function askRag(question) {
-  const url = `http://localhost:8000/api/ask`;
-  const res = await fetch(url, {
-    method: 'POST',
+};
+
+export async function askRag(question) {
+  const url = `${BASE_URL}/ask`;
+  const res = await trackedFetch(url, {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify({ question })
+    body: JSON.stringify({ question }),
   });
 
-  const data = await res.json(); // Parse the response
+  const data = await res.json();
 
   if (!res.ok) {
-    console.error('Error response:', data); // Log full error object
     const message = data?.error || data?.detail || JSON.stringify(data);
     throw new Error(`RAG request failed: ${message}`);
   }

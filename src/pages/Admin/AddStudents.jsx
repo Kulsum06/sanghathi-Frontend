@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSnackbar } from "notistack";
 import Papa from 'papaparse';
 import { 
   Container, 
   Button, 
-  Card, 
   Stack, 
   Typography,
   Box,
@@ -13,7 +12,6 @@ import {
   CircularProgress,
   Tab,
   Tabs,
-  IconButton,
   Alert,
   List,
   ListItem,
@@ -24,14 +22,16 @@ import {
   FileDownload as FileDownloadIcon,
   Person as PersonIcon,
   School as SchoolIcon,
-  AdminPanelSettings as AdminIcon,
   HelpOutline as HelpOutlineIcon,
   SupervisorAccount as SupervisorAccountIcon
 } from '@mui/icons-material';
 import api from "../../utils/axios";
-import { getUserSchema } from "../Users/UserForm";
 import { alpha, useTheme } from "@mui/material/styles";
+import useDraftPersistence from "../../hooks/useDraftPersistence";
+import { resolveDraftScopeId } from "../../utils/draftScope";
+import { recordAdminUploadSession } from "../../utils/uploadHistory";
 
+import logger from "../../utils/logger.js";
 // Define role options with their related info
 const ROLES = [
   { 
@@ -107,6 +107,36 @@ const AddStudents = () => {
   const [errorCount, setErrorCount] = useState(0);
   const [errors, setErrors] = useState([]);
   const [file, setFile] = useState(null);
+
+  const draftScopeId = useMemo(() => resolveDraftScopeId(), []);
+
+  const restoreDraftState = useCallback((draftData = {}) => {
+    const nextRole = ROLES.some((role) => role.value === draftData.selectedRole)
+      ? draftData.selectedRole
+      : "student";
+
+    setSelectedRole(nextRole);
+    setSuccessCount(Number(draftData.successCount) || 0);
+    setErrorCount(Number(draftData.errorCount) || 0);
+    setErrors(Array.isArray(draftData.errors) ? draftData.errors : []);
+  }, []);
+
+  const persistedErrors = useMemo(() => errors.slice(0, 200), [errors]);
+
+  useDraftPersistence({
+    formType: "admin-user-bulk-upload",
+    scopeId: draftScopeId,
+    values: {
+      selectedRole,
+      successCount,
+      errorCount,
+      errors: persistedErrors,
+      hasSelectedFile: Boolean(file),
+      isProcessing: processing,
+    },
+    reset: restoreDraftState,
+    enableServerSync: false,
+  });
 
   // Get the color based on the current theme mode
   const activeColor = isLight ? theme.palette.primary.main : theme.palette.info.main;
@@ -185,6 +215,8 @@ const AddStudents = () => {
     let success = 0;
     let errors = 0;
     const newErrors = [];
+    const affectedUserIds = new Set();
+    const createdUserIds = new Set();
 
     for (const [index, row] of rows.entries()) {
       try {
@@ -256,15 +288,27 @@ const AddStudents = () => {
         }
 
         try {
-          console.log("Sending data:", data); // Add this for debugging
+          logger.info("Sending data:", data); // Add this for debugging
           const response = await api.post(endpoint, data);
           if (response.data) {
             success++;
+
+            const createdUserId =
+              response.data?.data?.user?._id ||
+              response.data?.data?.user?.id ||
+              response.data?._id ||
+              response.data?.user?._id ||
+              null;
+
+            if (createdUserId) {
+              createdUserIds.add(String(createdUserId));
+              affectedUserIds.add(String(createdUserId));
+            }
           }
         } catch (error) {
           errors++;
           const errorMessage = error.response?.data?.message || error.message;
-          console.error("Error details:", error.response?.data); // Keep this for debugging
+          logger.error("Error details:", error.response?.data); // Keep this for debugging
           newErrors.push(`Row ${index + 1}: ${errorMessage}`);
         }
       } catch (error) {
@@ -273,6 +317,20 @@ const AddStudents = () => {
       }
     }
 
+    await recordAdminUploadSession({
+      tabType: "add-users",
+      fileName: file?.name || "",
+      totalRows: rows.length,
+      successCount: success,
+      errorCount: errors,
+      errors: newErrors,
+      affectedUserIds: Array.from(affectedUserIds),
+      createdUserIds: Array.from(createdUserIds),
+      metadata: {
+        role: selectedRole,
+      },
+    });
+
     setSuccessCount(success);
     setErrorCount(errors);
     setErrors(newErrors);
@@ -280,11 +338,11 @@ const AddStudents = () => {
   };
 
   return (
-    <Container maxWidth="md">
+    <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
       <Paper
         elevation={3}
         sx={{
-          p: 4,
+          p: { xs: 2, sm: 4 },
           borderRadius: 2,
           backgroundColor: isLight 
             ? 'rgba(255, 255, 255, 0.8)'
@@ -320,7 +378,7 @@ const AddStudents = () => {
           <Typography 
             variant="body1" 
             color="text.secondary"
-            sx={{ maxWidth: 600, mx: 'auto' }}
+            sx={{ maxWidth: { xs: '100%', sm: 600 }, mx: 'auto' }}
           >
             Upload a CSV file to add multiple users at once
           </Typography>
@@ -554,7 +612,7 @@ const AddStudents = () => {
             border: `1px dashed ${alpha(theme.palette.warning.main, 0.2)}`,
             borderRadius: 2,
             display: 'flex',
-            alignItems: 'center',
+            alignItems: { xs: 'flex-start', sm: 'center' },
             gap: 1,
           }}
         >

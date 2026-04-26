@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
   Divider,
@@ -13,16 +13,23 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Button,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
 import { AuthContext } from "../../context/AuthContext";
 import Page from "../../components/Page";
 import api from "../../utils/axios";
 import { MessageList, MessageInput } from "./Message/Message";
 import useSocket from "../../hooks/useSocket";
+import {
+  getAvatarSrc,
+  getAvatarFallbackText,
+} from "../../utils/avatarResolver";
 
-const ThreadHeader = ({ thread, onCloseThread, currentUser }) => {
+import logger from "../../utils/logger.js";
+const ThreadHeader = ({ thread, onCloseThread, currentUser, onBack }) => {
   const statusColors = {
     open: "#4caf50",
     "In Progress": "#ff9800",
@@ -39,20 +46,67 @@ const ThreadHeader = ({ thread, onCloseThread, currentUser }) => {
     setAnchorEl(null);
   };
 
+  const getDisplayParticipants = () => {
+    const participants = Array.isArray(thread?.participants)
+      ? thread.participants
+      : [];
+
+    if (currentUser?.roleName !== "faculty") {
+      return participants;
+    }
+
+    const studentParticipants = participants.filter(
+      (participant) => participant?.roleName === "student"
+    );
+
+    if (studentParticipants.length > 0) {
+      return studentParticipants;
+    }
+
+    return participants.filter(
+      (participant) => participant?._id !== currentUser?._id
+    );
+  };
+
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        mb: 2,
-      }}
-    >
-      <Box>
-        <Typography variant="h4" sx={{ fontWeight: "bold", mb: 1 }}>
+    <Box>
+      <Button
+        variant="text"
+        onClick={onBack}
+        startIcon={<ArrowBackIosNewRoundedIcon sx={{ fontSize: 14 }} />}
+        sx={{
+          mb: 1,
+          px: 0,
+          minWidth: "fit-content",
+          textTransform: "none",
+          fontWeight: 600,
+        }}
+      >
+        Back to Threads
+      </Button>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          justifyContent: "space-between",
+          alignItems: { xs: "flex-start", sm: "center" },
+          gap: 1.5,
+          mb: 2,
+        }}
+      >
+        <Box>
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: "bold",
+            mb: 1,
+            fontSize: { xs: "1.35rem", sm: "2rem" },
+            lineHeight: 1.2,
+          }}
+        >
           {thread.title}
         </Typography>
-        <Box sx={{ display: "flex", alignItems: "center", mt: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", mt: 1, flexWrap: "wrap", rowGap: 0.8 }}>
           <Typography
             variant="subtitle2"
             sx={{
@@ -88,65 +142,73 @@ const ThreadHeader = ({ thread, onCloseThread, currentUser }) => {
             Status: {thread.status}
           </Typography>
         </Box>
-      </Box>
-      <Box sx={{ display: "flex", alignItems: "center" }}>
-        {thread.participants.map((participant, idx) => (
-          <Tooltip
-            key={participant._id}
-            title={participant.name}
-            placement="top"
-          >
-            <Avatar
-              sx={{
-                ml: idx === 0 ? 0 : -1,
-                zIndex: 100 - idx,
-                width: 36,
-                height: 36,
-                position: "relative",
-              }}
-              alt={participant.name}
-            >
-              <Box
-                sx={{
-                  position: "absolute",
-                  bottom: 10,
-                  right: 8,
-                  transform: "translate(50%, 50%)",
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  border: `1px solid ${"success.main"}`,
-                  backgroundColor: "success.main",
-                }}
-              />
-              {participant.name[0]}
-            </Avatar>
-          </Tooltip>
-        ))}
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 0.8 }}>
+          {getDisplayParticipants().map((participant, idx) => {
+            const participantAvatarSrc = getAvatarSrc(participant);
 
-        {/* "Mark as closed" option remains unchanged */}
-        {thread.status === "open" &&
-          thread.participants[0]._id === currentUser._id && (
-            <Box sx={{ ml: 2 }}>
-              <IconButton onClick={handleClick}>
-                <MoreVertIcon />
-              </IconButton>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleClose}
+            return (
+            <Tooltip
+              key={participant._id}
+              title={participant.name}
+              placement="top"
+            >
+              <Avatar
+                src={participantAvatarSrc || undefined}
+                sx={{
+                  ml: idx === 0 ? 0 : { xs: -0.75, sm: -1 },
+                  zIndex: 100 - idx,
+                  width: 36,
+                  height: 36,
+                  position: "relative",
+                }}
+                alt={participant.name}
               >
-                <MenuItem
-                  onClick={() => {
-                    handleClose();
-                    onCloseThread();
+                <Box
+                  sx={{
+                    position: "absolute",
+                    bottom: 10,
+                    right: 8,
+                    transform: "translate(50%, 50%)",
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    border: `1px solid ${"success.main"}`,
+                    backgroundColor: "success.main",
                   }}
+                />
+                {!participantAvatarSrc
+                  ? getAvatarFallbackText(participant.name)
+                  : null}
+              </Avatar>
+            </Tooltip>
+            );
+          })}
+
+          {/* "Mark as closed" option remains unchanged */}
+          {thread.status === "open" &&
+            thread.participants[0]._id === currentUser._id && (
+              <Box sx={{ ml: { xs: 0.75, sm: 2 } }}>
+                <IconButton onClick={handleClick}>
+                  <MoreVertIcon />
+                </IconButton>
+                <Menu
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleClose}
                 >
-                  Mark as closed
-                </MenuItem>
-              </Menu>
-            </Box>
-          )}
+                  <MenuItem
+                    onClick={() => {
+                      handleClose();
+                      onCloseThread();
+                    }}
+                  >
+                    Mark as closed
+                  </MenuItem>
+                </Menu>
+              </Box>
+            )}
+        </Box>
       </Box>
     </Box>
   );
@@ -157,6 +219,7 @@ export default function ThreadWindow() {
   const [thread, setThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const { threadId } = useParams();
   const { sendMessage, joinRoom, leaveRoom } = useSocket(
     threadId,
@@ -168,13 +231,13 @@ export default function ThreadWindow() {
   // Join the socket room when the component mounts and threadId is available
   useEffect(() => {
     if (threadId) {
-      console.log(`Joining thread room: ${threadId}`);
+      logger.info(`Joining thread room: ${threadId}`);
       joinRoom(threadId);
     }
 
     return () => {
       if (threadId) {
-        console.log(`Leaving thread room: ${threadId}`);
+        logger.info(`Leaving thread room: ${threadId}`);
         leaveRoom(threadId);
       }
     };
@@ -183,15 +246,20 @@ export default function ThreadWindow() {
   const fetchThread = async () => {
     try {
       setIsLoading(true);
-      const response = await api.get(`/threads/${threadId}`);
+      const response = await api.get(`/threads/${threadId}`, {
+        params: {
+          messagePage: 1,
+          messageLimit: 150,
+        },
+      });
       if (response.status === 200) {
         const { data } = response.data;
         setThread(data.thread);
         setMessages(data.thread.messages);
-        console.log("THREAD ", data.thread);
+        logger.info("THREAD ", data.thread);
       }
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       enqueueSnackbar("Error loading thread", { variant: "error" });
     } finally {
       setIsLoading(false);
@@ -216,7 +284,7 @@ export default function ThreadWindow() {
       setMessages((prev) => [...prev, data.message]);
       sendMessage(data.message, threadId);
     } catch (err) {
-      console.log(err);
+      logger.info(err);
     }
   };
 
@@ -234,21 +302,36 @@ export default function ThreadWindow() {
       }
     } catch (error) {
       enqueueSnackbar("Something went wrong!", { variant: "error" });
-      console.error("ERROR OCCURRED 💥 ", error);
+      logger.error("ERROR OCCURRED 💥 ", error);
     }
+  };
+
+  const handleBackToThreads = () => {
+    navigate("/threads");
   };
 
   return (
     <Page title="Thread">
-      <Container maxWidth="xl" sx={{ overflowX: "hidden", overflowY: "auto" }}>
-        <Card sx={{ height: "90vh", display: "flex", flexShrink: 0 }}>
-          <Stack sx={{ flexGrow: 1, minWidth: "1px" }}>
-            <Box sx={{ p: 2 }}>
+      <Container
+        maxWidth="xl"
+        sx={{ px: { xs: 1.5, sm: 3 }, overflowX: "hidden", overflowY: "auto" }}
+      >
+        <Card
+          sx={{
+            height: { xs: "calc(100vh - 140px)", sm: "80vh" },
+            minHeight: { xs: 520, sm: 620 },
+            display: "flex",
+            overflow: "hidden",
+          }}
+        >
+          <Stack sx={{ flexGrow: 1, minWidth: "1px", minHeight: 0 }}>
+            <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
               {thread && (
                 <ThreadHeader
                   thread={thread}
                   onCloseThread={handleThreadClose}
                   currentUser={user}
+                  onBack={handleBackToThreads}
                 />
               )}
             </Box>
@@ -259,6 +342,7 @@ export default function ThreadWindow() {
                 display: "flex",
                 overflow: "hidden",
                 minWidth: "0",
+                minHeight: 0,
               }}
             >
               {isLoading ? (
@@ -273,7 +357,7 @@ export default function ThreadWindow() {
                   <CircularProgress />
                 </Box>
               ) : (
-                <Stack sx={{ flexGrow: 1, flexShrink: 0 }}>
+                <Stack sx={{ flexGrow: 1, minHeight: 0 }}>
                   {thread && (
                     <>
                       <MessageList conversation={thread} messages={messages} />

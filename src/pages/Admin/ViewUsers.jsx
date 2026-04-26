@@ -15,7 +15,7 @@ export default function ViewUsers() {
 
   return (
     <Page title="View Users">
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
         <UserList onEdit={handleEdit} />
       </Container>
     </Page>

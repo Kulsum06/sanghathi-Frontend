@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -20,16 +20,15 @@ import {
 } from "@mui/icons-material";
 import { alpha, useTheme } from "@mui/material/styles";
 import Papa from "papaparse";
-import axios from "axios";
-
-
-const BASE_URL = import.meta.env.VITE_API_URL;
-
+import api from "../../utils/axios";
+import useDraftPersistence from "../../hooks/useDraftPersistence";
+import { resolveDraftScopeId } from "../../utils/draftScope";
+import { recordAdminUploadSession } from "../../utils/uploadHistory";
+import logger from "../../utils/logger.js";
 
 const AddTylMarks = () => {
   const theme = useTheme();
   const isLight = theme.palette.mode === "light";
-
 
   const [processing, setProcessing] = useState(false);
   const [successCount, setSuccessCount] = useState(0);
@@ -37,62 +36,64 @@ const AddTylMarks = () => {
   const [errors, setErrors] = useState([]);
   const [file, setFile] = useState(null);
 
+  const draftScopeId = useMemo(() => resolveDraftScopeId(), []);
+
+  const restoreDraftState = useCallback((draftData = {}) => {
+    setSuccessCount(Number(draftData.successCount) || 0);
+    setErrorCount(Number(draftData.errorCount) || 0);
+    setErrors(Array.isArray(draftData.errors) ? draftData.errors : []);
+  }, []);
+
+  const persistedErrors = useMemo(() => errors.slice(0, 200), [errors]);
+
+  useDraftPersistence({
+    formType: "admin-tyl-upload",
+    scopeId: draftScopeId,
+    values: {
+      successCount,
+      errorCount,
+      errors: persistedErrors,
+      hasSelectedFile: Boolean(file),
+      isProcessing: processing,
+    },
+    reset: restoreDraftState,
+    enableServerSync: false,
+  });
 
   // ================= TEMPLATE DOWNLOAD =================
   const downloadTemplate = () => {
     const headers = [
       "SlNo", "Email", "FullName", "USN", "Phone", "Branch",
-
-
       "L1", "L2", "L3", "L4",
       "A1", "A2", "A3", "A4",
       "S1", "S2", "S3", "S4",
-
-
       "C2_Odd", "C2_Full", "C3_Odd", "C3_Full",
       "C4_Odd", "C4_Full", "C5_Full",
-
-
       "P1_C", "P2_Python", "P3_Python", "P3_Java",
       "P4_Programming_Part1", "P4_Programming_Part2",
       "P4_MAD_FSD", "P4_DS", "P2Plus_Python"
     ];
 
-
     const TotalMarks = [
       "", "", "", "", "", "Total Marks: ",   // for SNo, Email, FullName, etc.
-
-
       100, 100, 100, 100,
       100, 100, 100, 100,
       100, 100, 100, 100,
-
-
       25, 25, 50, 100, 100, 100, 100,
-
-
       100, 100, 100, 100, 100, 100, 100, 100, 100
     ];
     const passingRow = [
       "", "", "", "", "", "Passing Criteria",   // for SNo, Email, FullName, etc.
-
-
       65, 65, 70, 70,   // L1, L2, L3, L4
       50, 50, 50, 65,   // A1, A2, A3, A4
       50, 50, 50, 50,   // S1, S2, S3, S4
-
-
       10, 10, 50, 50,   // C2, C3 etc (example)
       50, 50, 50,
-
-
       50, 50, 60, 60,   // P1, P2 etc
       100, 100, 0, 0
     ];
     const exampleRow = [
       1, "student@cmrit.ac.in", "AAMITH PRAMOD", "1CR23IS001", "9148164893", "ISE",
-
-
     ];
     const csv = Papa.unparse([headers, TotalMarks, passingRow, exampleRow], { quotes: true });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -106,37 +107,31 @@ const AddTylMarks = () => {
     URL.revokeObjectURL(url);
   };
 
-
   // ================= LEVEL CALCULATION =================
   const calculateLevel = (marksObj, passingCriteria) => {
     let passed = 0;
     const total = Object.keys(passingCriteria).length;
-
 
     for (const key in passingCriteria) {
       const mark = parseInt(marksObj[key] || 0, 10);
       if (mark >= passingCriteria[key]) passed++;
     }
 
-
     if (passed === total) return 2;
     if (passed > 0) return 1;
     return 0;
   };
-
 
   // ================= FILE UPLOAD =================
   const handleFileUpload = (event) => {
     const uploadedFile = event.target.files[0];
     if (!uploadedFile) return;
 
-
     setFile(uploadedFile);
     setProcessing(true);
     setErrors([]);
     setSuccessCount(0);
     setErrorCount(0);
-
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -150,31 +145,23 @@ const AddTylMarks = () => {
     reader.readAsText(uploadedFile);
   };
 
-
   // ================= PROCESS ROWS =================
   const processRows = async (rows) => {
     let success = 0;
     let errCount = 0;
     const newErrors = [];
-
+    const affectedUserIds = new Set();
 
     for (const row of rows) {
-
-
       const branch = (row.Branch || "").toLowerCase().trim();
-
-
       if (
         !row.USN ||
         branch.includes("total") ||
         branch.includes("passing")
       ) continue;
 
-
       try {
         if (!row.USN) throw new Error("USN missing");
-
-
         // MARK GROUPS
         const language = { L1: row.L1, L2: row.L2, L3: row.L3, L4: row.L4 };
         const aptitude = { A1: row.A1, A2: row.A2, A3: row.A3, A4: row.A4 };
@@ -197,7 +184,6 @@ const AddTylMarks = () => {
           P2Plus_Python: row.P2Plus_Python
         };
 
-
         // PASS CRITERIA
         const languagePass = { L1: 65, L2: 65, L3: 70, L4: 70 };
         const aptitudePass = { A1: 50, A2: 50, A3: 50, A4: 65 };
@@ -217,7 +203,6 @@ const AddTylMarks = () => {
           P4_DS: 70,
           P2Plus_Python: 60
         };
-
 
         const levels = {
           Lx_Level: calculateLevel(language, languagePass),
@@ -257,38 +242,46 @@ const AddTylMarks = () => {
           }
         };
 
+        const normalizedUsn = row.USN
+          ?.toString()
+          .trim()
+          .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, "")
+          .toUpperCase();
 
-        const response = await axios.get(`${BASE_URL}/users/usn/${row.USN}`);
-        const userId = response.data?._id;
+        const response = await api.get(`/users/usn/${encodeURIComponent(normalizedUsn)}`, {
+          params: { _ts: Date.now() },
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache"
+          }
+        });
+        const userId = response.data?.userId || response.data?._id;
         if (!userId) throw new Error("User not found");
 
-
-        await axios.post(`${BASE_URL}/students/tyl/${userId}`, {
-          language,
-          aptitude,
-          softskill,
-          core,
-          programming,
-          levels
-        });
-        await axios.post(`${BASE_URL}/tyl-scores`, {
+        await api.post(`/tyl-scores`, {
           userId,
           semester: 1,
           scores
-        }, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`
-          }
         });
 
-
         success++;
+        affectedUserIds.add(String(userId));
       } catch (error) {
         errCount++;
         newErrors.push(`Error for ${row.USN}: ${error.message}`);
+        logger.error(`Error processing TYL for ${row.USN}:`, error);
       }
     }
 
+    await recordAdminUploadSession({
+      tabType: "add-tyl-marks",
+      fileName: file?.name || "",
+      totalRows: rows.length,
+      successCount: success,
+      errorCount: errCount,
+      errors: newErrors,
+      affectedUserIds: Array.from(affectedUserIds),
+    });
 
     setSuccessCount(success);
     setErrorCount(errCount);
@@ -296,31 +289,30 @@ const AddTylMarks = () => {
     setProcessing(false);
   };
 
-
   // ================= UI =================
   return (
-    <Container maxWidth="md">
-      <Paper elevation={3} sx={{ p: 4, borderRadius: 2, mb: 4 }}>
+    <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 4 }, borderRadius: 2, mb: 4 }}>
         <Typography variant="h4" align="center" sx={{ mb: 2 }}>
           Upload TYL Marks
         </Typography>
 
-
-        <Stack direction="row" spacing={2} justifyContent="center">
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center" alignItems="stretch">
           <Button
             variant="outlined"
             startIcon={<FileDownloadIcon />}
             onClick={downloadTemplate}
+            sx={{ width: { xs: "100%", sm: "auto" } }}
           >
             Download Template
           </Button>
-
 
           <Button
             variant="contained"
             component="label"
             startIcon={<CloudUploadIcon />}
             disabled={processing}
+            sx={{ width: { xs: "100%", sm: "auto" } }}
           >
             {processing ? "Processing..." : "Upload File"}
             <input
@@ -331,7 +323,6 @@ const AddTylMarks = () => {
             />
           </Button>
         </Stack>
-
 
         {!processing && (successCount > 0 || errorCount > 0) && (
           <Box sx={{ mt: 3 }}>
@@ -348,7 +339,6 @@ const AddTylMarks = () => {
           </Box>
         )}
 
-
         {errors.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <List dense>
@@ -361,7 +351,6 @@ const AddTylMarks = () => {
           </Box>
         )}
 
-
         <Paper sx={{ mt: 4, p: 2 }}>
           <Typography variant="body2">
             <strong>Note:</strong> Levels are automatically calculated based on passing criteria.
@@ -371,6 +360,5 @@ const AddTylMarks = () => {
     </Container>
   );
 };
-
 
 export default AddTylMarks;

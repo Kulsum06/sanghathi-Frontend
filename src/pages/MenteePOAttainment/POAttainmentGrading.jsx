@@ -22,6 +22,7 @@ import { useSearchParams } from "react-router-dom";
 import { useTheme } from "@mui/material/styles";
 import useStudentSemester from "../../hooks/useStudentSemester";
 
+import logger from "../../utils/logger.js";
 const POAttainmentGrading = () => {
   const theme = useTheme();
   const { user } = useContext(AuthContext);
@@ -93,7 +94,7 @@ const POAttainmentGrading = () => {
         // Set default semester: use student's current semester if available, otherwise first semester
         if (response.data.data.semesters.length > 0 && !selectedSemester) {
           const defaultSem = studentSemester || response.data.data.semesters[0].semester;
-          console.log('[POAttainmentGrading] Setting semester to:', defaultSem, '(studentSemester:', studentSemester, ', first available:', response.data.data.semesters[0].semester, ')');
+          logger.info('[POAttainmentGrading] Setting semester to:', defaultSem, '(studentSemester:', studentSemester, ', first available:', response.data.data.semesters[0].semester, ')');
           setSelectedSemester(defaultSem);
         }
       } else {
@@ -104,7 +105,7 @@ const POAttainmentGrading = () => {
       
       setLoading(false);
     } catch (err) {
-      console.error("Error fetching PO attainment data:", err);
+      logger.error("Error fetching PO attainment data:", err);
       setSemesterData([]);
       resetToEmptyData();
       setError("Failed to fetch data. Using empty template.");
@@ -183,7 +184,7 @@ const POAttainmentGrading = () => {
       
       enqueueSnackbar("Grading saved successfully!", { variant: "success" });
     } catch (error) {
-      console.error("Error saving grading data:", error);
+      logger.error("Error saving grading data:", error);
       enqueueSnackbar("Failed to save grading data", { variant: "error" });
     }
   };

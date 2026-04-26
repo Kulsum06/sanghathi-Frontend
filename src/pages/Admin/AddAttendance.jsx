@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { 
   Box, 
   Button, 
@@ -20,9 +20,12 @@ import {
 } from '@mui/icons-material';
 import { alpha, useTheme } from "@mui/material/styles";
 import Papa from "papaparse";
-import axios from "axios";
+import api from "../../utils/axios";
+import useDraftPersistence from "../../hooks/useDraftPersistence";
+import { resolveDraftScopeId } from "../../utils/draftScope";
+import { recordAdminUploadSession } from "../../utils/uploadHistory";
 
-const BASE_URL = import.meta.env.VITE_API_URL;
+import logger from "../../utils/logger.js";
 
 const AddAttendance = () => {
   const theme = useTheme();
@@ -32,6 +35,30 @@ const AddAttendance = () => {
   const [errorCount, setErrorCount] = useState(0);
   const [errors, setErrors] = useState([]);
   const [file, setFile] = useState(null);
+
+  const draftScopeId = useMemo(() => resolveDraftScopeId(), []);
+
+  const restoreDraftState = useCallback((draftData = {}) => {
+    setSuccessCount(Number(draftData.successCount) || 0);
+    setErrorCount(Number(draftData.errorCount) || 0);
+    setErrors(Array.isArray(draftData.errors) ? draftData.errors : []);
+  }, []);
+
+  const persistedErrors = useMemo(() => errors.slice(0, 200), [errors]);
+
+  useDraftPersistence({
+    formType: "admin-attendance-upload",
+    scopeId: draftScopeId,
+    values: {
+      successCount,
+      errorCount,
+      errors: persistedErrors,
+      hasSelectedFile: Boolean(file),
+      isProcessing: processing,
+    },
+    reset: restoreDraftState,
+    enableServerSync: false,
+  });
 
   // Month mapping - handles both full names and abbreviations
   const monthMap = {
@@ -131,6 +158,7 @@ const AddAttendance = () => {
     let success = 0;
     let errors = 0;
     const newErrors = [];
+    const affectedUserIds = new Set();
 
     for (const [index, row] of rows.entries()) {
       // Find headers case-insensitively (declare outside try block for catch access)
@@ -140,7 +168,7 @@ const AddAttendance = () => {
       const monthKey = rowHeaders.find(h => h.toLowerCase() === 'month');
       
       try {
-        console.log(`Processing row ${index + 1}:`, row);
+        logger.info(`Processing row ${index + 1}:`, row);
         
         // Trim all values and check for required fields
         const usn = row[usnKey]?.toString().trim();
@@ -233,26 +261,27 @@ const AddAttendance = () => {
           });
         }
 
-        const response = await axios.get(`${BASE_URL}/users/usn/${usn}`);
-        console.log("User lookup response: ", response);
+        const response = await api.get(`/users/usn/${usn}`);
+        logger.info("User lookup response: ", response);
         if (!response.data?.userId) {
           throw new Error(`User not found`);
         }
         const userId = response.data.userId;
-        console.log("UserId: ", userId);
+        logger.info("UserId: ", userId);
 
         const attendanceData = {
           semester: parseInt(sem, 10),
           month: monthValue,
           subjects,
         };
-        console.log("Attendance Data to send: ", attendanceData);
+        logger.info("Attendance Data to send: ", attendanceData);
 
         try {
-          await axios.post(`${BASE_URL}/students/attendance/${userId}`, attendanceData);
+          await api.post(`/students/attendance/${userId}`, attendanceData);
           success++;
+          affectedUserIds.add(String(userId));
         } catch (postError) {
-          console.error("Post error details:", postError.response?.data);
+          logger.error("Post error details:", postError.response?.data);
           const errorMessage = postError.response?.data?.message || 
                              postError.response?.data?.error || 
                              postError.message || 
@@ -262,9 +291,19 @@ const AddAttendance = () => {
       } catch (error) {
         errors++;
         newErrors.push(`USN: ${row[usnKey] || 'Unknown'} - ${error.message}`);
-        console.error(`Error processing row ${index + 1}:`, error);
+        logger.error(`Error processing row ${index + 1}:`, error);
       }
     }
+
+    await recordAdminUploadSession({
+      tabType: "add-attendance",
+      fileName: file?.name || "",
+      totalRows: rows.length,
+      successCount: success,
+      errorCount: errors,
+      errors: newErrors,
+      affectedUserIds: Array.from(affectedUserIds),
+    });
 
     setSuccessCount(success);
     setErrorCount(errors);
@@ -273,11 +312,11 @@ const AddAttendance = () => {
   };
 
   return (
-    <Container maxWidth="md">
+    <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
       <Paper
         elevation={3}
         sx={{
-          p: 4,
+          p: { xs: 2, sm: 4 },
           borderRadius: 2,
           backgroundColor: isLight 
             ? 'rgba(255, 255, 255, 0.8)'

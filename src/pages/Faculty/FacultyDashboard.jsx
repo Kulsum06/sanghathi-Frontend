@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Container, Grid, Typography, Box, useTheme, Paper } from "@mui/material";
+import React, { useState, useContext } from "react";
+import { Container, Grid, Typography, Box, useTheme } from "@mui/material";
 import Page from "../../components/Page";
 import { Card, CardHeader, CardContent, CardActionArea } from "@mui/material";
 import {
@@ -41,6 +41,8 @@ import HdrStrongIcon from '@mui/icons-material/HdrStrong';
 import { alpha } from "@mui/material/styles";
 
 import { Link } from "react-router-dom";
+import { AuthContext } from "../../context/AuthContext";
+import DashboardHeroCard from "../../components/dashboard/DashboardHeroCard";
 
 const StudentTile = ({ title, icon, link }) => {
   const theme = useTheme();
@@ -72,7 +74,7 @@ const StudentTile = ({ title, icon, link }) => {
             justifyContent: "flex-start",
             flexDirection: "row",
             minHeight: "auto",
-            p: 3,
+            p: { xs: 2, sm: 3 },
             "&:hover": {
               backgroundColor: isLight 
                 ? alpha(theme.palette.primary.main, 0.1)
@@ -85,10 +87,10 @@ const StudentTile = ({ title, icon, link }) => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 64,
-              height: 64,
+              width: { xs: 52, sm: 64 },
+              height: { xs: 52, sm: 64 },
               borderRadius: '12px',
-              mr: 3,
+              mr: { xs: 2, sm: 3 },
               backgroundColor: isLight
                 ? alpha(theme.palette.primary.main, 0.1)
                 : alpha(theme.palette.info.main, 0.15),
@@ -132,6 +134,7 @@ const StudentTile = ({ title, icon, link }) => {
 const FacultyDashboard = () => {
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
+  const { user } = useContext(AuthContext);
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
   
   const handleBugReportDialogOpen = () => {
@@ -154,125 +157,20 @@ const FacultyDashboard = () => {
           minHeight: '100vh',
         }}
       >
-        <Container maxWidth="xl" sx={{ p: isLight ? 0 : 0 }}>
-          {isLight && (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 4,
-                mb: 4,
-                mt: 1,
-                borderRadius: 3,
-                backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                backdropFilter: 'blur(20px)',
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
-              }}
-            >
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center',
-                  textAlign: 'center',
-                  mb: 3
-                }}
-              >
-                <Typography 
-                  variant="h4" 
-                  color="primary" 
-                  gutterBottom
-                  sx={{ 
-                    fontWeight: 'bold',
-                    position: 'relative',
-                    display: 'inline-block',
-                    '&:after': {
-                      content: '""',
-                      position: 'absolute',
-                      width: '40%',
-                      height: '4px',
-                      borderRadius: '2px',
-                      backgroundColor: theme.palette.primary.main,
-                      bottom: '-8px',
-                      left: '30%'
-                    }
-                  }}
-                >
-                  Faculty Dashboard
-                </Typography>
-                
-                <Typography 
-                  variant="body1" 
-                  color="text.secondary" 
-                  sx={{ maxWidth: '600px', mt: 3 }}
-                >
-                  Welcome to the Sanghathi faculty portal. Access all faculty services from here.
-                </Typography>
-              </Box>
-            </Paper>
-          )}
+        <Container maxWidth="xl" sx={{ px: { xs: 1.5, sm: 0 } }}>
+          <DashboardHeroCard
+            user={user}
+            fallbackName="Faculty"
+            dashboardTitle="Faculty Dashboard"
+            description="Welcome to the Sanghathi faculty portal. Access all faculty services from here."
+          />
 
-          {!isLight && (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 4,
-                mb: 4,
-                mt: 1,
-                borderRadius: 3,
-                backgroundColor: alpha(theme.palette.background.paper, 0.6),
-                backdropFilter: 'blur(20px)',
-                border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
-              }}
-            >
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center',
-                  textAlign: 'center',
-                  mb: 3
-                }}
-              >
-                <Typography 
-                  variant="h4" 
-                  color="info" 
-                  gutterBottom
-                  sx={{ 
-                    fontWeight: 'bold',
-                    position: 'relative',
-                    display: 'inline-block',
-                    '&:after': {
-                      content: '""',
-                      position: 'absolute',
-                      width: '40%',
-                      height: '4px',
-                      borderRadius: '2px',
-                      backgroundColor: theme.palette.info.main,
-                      bottom: '-8px',
-                      left: '30%'
-                    }
-                  }}
-                >
-                  Faculty Dashboard
-                </Typography>
-                
-                <Typography 
-                  variant="body1" 
-                  color="text.secondary" 
-                  sx={{ maxWidth: '600px', mt: 3 }}
-                >
-                  Welcome to the Sanghathi faculty portal. Access all faculty services from here.
-                </Typography>
-              </Box>
-            </Paper>
-          )}
-
-          <Grid container spacing={3}>
+          <Grid container spacing={{ xs: 2, sm: 3 }}>
             <Grid item xs={12} sm={6} md={isLight ? 6 : 6} lg={isLight ? 4 : 4}>
               <StudentTile
                 title="Profile"
                 icon={<PersonIcon />}
-                link="/faculty/FacultyProfile"
+                link="/faculty/profile"
               />
             </Grid>
 

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { io } from "socket.io-client";
 
+import logger from "../utils/logger.js";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
 const useSocket = (threadId, userId, setMessages) => {
@@ -20,14 +21,14 @@ const useSocket = (threadId, userId, setMessages) => {
     });
 
     socket.current.on("connect", () => {
-      console.log("Socket connected:", socket.current.id);
+      logger.info("Socket connected:", socket.current.id);
       if (threadId) {
         joinRoom(threadId);
       }
     });
 
     socket.current.on("connect_error", (error) => {
-      console.error("Socket connection error:", error);
+      logger.error("Socket connection error:", error);
     });
 
     return () => {
@@ -37,7 +38,7 @@ const useSocket = (threadId, userId, setMessages) => {
 
   useEffect(() => {
     socket.current.on("receiveMessage", (message) => {
-      console.log("Received message:", message);
+      logger.info("Received message:", message);
       setMessages((prev) => [...prev, message]);
     });
 
@@ -47,7 +48,7 @@ const useSocket = (threadId, userId, setMessages) => {
   }, [setMessages]);
 
   const sendMessage = useCallback((message, roomId) => {
-    console.log("Sending message through socket:", message, "to room:", roomId);
+    logger.info("Sending message through socket:", message, "to room:", roomId);
     socket.current.emit("sendMessage", {
       ...message,
       roomId,
@@ -56,13 +57,13 @@ const useSocket = (threadId, userId, setMessages) => {
 
   const joinRoom = useCallback((roomId) => {
     if (!roomId) return;
-    console.log("Joining room:", roomId);
+    logger.info("Joining room:", roomId);
     socket.current.emit("join_room", roomId);
   }, []);
 
   const leaveRoom = useCallback((roomId) => {
     if (!roomId) return;
-    console.log("Leaving room:", roomId);
+    logger.info("Leaving room:", roomId);
     socket.current.emit("leave_room", roomId);
   }, []);
 

@@ -1,174 +1,367 @@
 import { useState, useEffect, useCallback, useContext } from "react";
-import axios from "axios";
 import {
+  Alert,
+  Avatar,
   Box,
+  Button,
+  Card,
+  CardContent,
   Container,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Chip,
+  Divider,
+  Grid,
   Paper,
+  Stack,
   Typography,
   useTheme,
 } from "@mui/material";
+import {
+  Business as BusinessIcon,
+  Email as EmailIcon,
+  EventAvailable as EventAvailableIcon,
+  LocalPhone as LocalPhoneIcon,
+  MeetingRoom as MeetingRoomIcon,
+  Person as PersonIcon,
+} from "@mui/icons-material";
 import { AuthContext } from "../../context/AuthContext";
-const BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../../utils/axios";
+import logger from "../../utils/logger.js";
+import { getAvatarFallbackText, getAvatarSrc } from "../../utils/avatarResolver";
+
+const formatValue = (value) => {
+  if (value === null || value === undefined) {
+    return "Not available";
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : "Not available";
+  }
+
+  return String(value);
+};
+
+const getPhoneHref = (phoneValue) => {
+  const value = formatValue(phoneValue);
+  if (value === "Not available") {
+    return null;
+  }
+
+  const normalized = value.replace(/[^0-9+]/g, "");
+  return normalized ? `tel:${normalized}` : null;
+};
+
+const InfoRow = ({ icon, label, value }) => (
+  <Stack direction="row" spacing={1.2} alignItems="flex-start" sx={{ py: 0.8 }}>
+    {icon}
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+        {label}
+      </Typography>
+      <Typography variant="body1" color="text.primary" sx={{ fontWeight: 500 }}>
+        {formatValue(value)}
+      </Typography>
+    </Box>
+  </Stack>
+);
 
 const FacultyProfileInfo = () => {
-  const theme = useTheme(); // Use theme for consistent styling
+  const theme = useTheme();
   const { user } = useContext(AuthContext);
-  const [mentorId, setMentorId] = useState("");
-  const [facultyProfile, setFacultyProfile] = useState(null);
+  const [mentorDetails, setMentorDetails] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const isLight = theme.palette.mode === "light";
 
-  const fetchMentorId = useCallback(async () => {
+  const fetchMentorDetails = useCallback(async () => {
     if (!user || !user._id) {
-      console.error("User ID not found");
+      logger.error("User ID not found");
+      setErrorMessage("Unable to identify current user.");
       setLoading(false);
       return;
     }
 
     try {
-      const response = await axios.get(
-        `${BASE_URL}/mentorship/mentor/${user._id}`
-      );
-      const mentor = response.data?.mentor;
+      setErrorMessage("");
+      const mentorResponse = await api.get(`/mentorship/mentor/${user._id}`);
+      const mentor = mentorResponse.data?.mentor;
 
       if (mentor?._id) {
-        setMentorId(mentor._id);
+        let facultyProfile = null;
+
+        const shouldFetchProfile = !(
+          mentor.department &&
+          mentor.cabin &&
+          (mentor.mobileNumber || mentor.phone)
+        );
+
+        if (shouldFetchProfile) {
+          try {
+            const profileResponse = await api.get(`/faculty/profile/${mentor._id}`);
+            facultyProfile = profileResponse.data?.data?.facultyProfile || null;
+          } catch (profileError) {
+            if (profileError?.response?.status !== 404) {
+              logger.error("Error fetching faculty profile:", profileError);
+            }
+          }
+        }
+
+        const profileName = facultyProfile?.fullName
+          ? [
+              facultyProfile.fullName.firstName,
+              facultyProfile.fullName.middleName,
+              facultyProfile.fullName.lastName,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : null;
+
+        setMentorDetails({
+          fullName: profileName || mentor.name || "Not available",
+          roleName: mentor.roleName || "Faculty Mentor",
+          department: facultyProfile?.department || mentor.department || "Not available",
+          email: facultyProfile?.email || mentor.email || "Not available",
+          personalEmail:
+            facultyProfile?.personalEmail || mentor.personalEmail || "Not available",
+          mobileNumber:
+            facultyProfile?.mobileNumber ||
+            mentor.mobileNumber ||
+            mentor.phone ||
+            "Not available",
+          alternatePhoneNumber:
+            facultyProfile?.alternatePhoneNumber ||
+            mentor.alternatePhoneNumber ||
+            "Not available",
+          cabin: facultyProfile?.cabin || mentor.cabin || "Not available",
+          status: mentor.status || "active",
+          photo:
+            facultyProfile?.photo ||
+            mentor.photo ||
+            mentor.avatar ||
+            null,
+        });
       } else {
-        console.error("Mentor ID not found");
-        setLoading(false);
+        setErrorMessage("No mentor assigned yet.");
       }
     } catch (error) {
-      console.error("Error fetching mentor ID:", error);
+      logger.error("Error fetching mentor details:", error);
+      if (error?.response?.status === 404) {
+        setErrorMessage("No mentor assigned yet.");
+      } else {
+        setErrorMessage("Unable to load mentor details right now.");
+      }
+    } finally {
       setLoading(false);
     }
   }, [user?._id]);
 
-  const fetchFacultyProfile = useCallback(async () => {
-    if (!mentorId) return;
-
-    try {
-      const response = await axios.get(
-        `${BASE_URL}/faculty/profile/${mentorId}`
-      );
-      const faculty = response.data?.data?.facultyProfile;
-
-      if (faculty) {
-        setFacultyProfile({
-          fullName: `${faculty.fullName.firstName} ${faculty.fullName.middleName || ' '} ${faculty.fullName.lastName || ' '}`,
-          department: faculty.department,
-          email: faculty.email,
-          mobileNumber: faculty.mobileNumber,
-          cabin: faculty.cabin,
-        });
-      } else {
-        console.error("Faculty profile not found");
-      }
-    } catch (error) {
-      console.error("Error fetching faculty profile:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [mentorId]);
-
   useEffect(() => {
-    fetchMentorId();
-  }, [fetchMentorId]);
+    fetchMentorDetails();
+  }, [fetchMentorDetails]);
 
-  useEffect(() => {
-    if (mentorId) {
-      fetchFacultyProfile();
-    }
-  }, [mentorId, fetchFacultyProfile]);
+  const mentorAvatarSrc = getAvatarSrc(mentorDetails);
+  const mentorFallbackName = mentorDetails?.fullName || "Mentor";
+  const officialEmail = formatValue(mentorDetails?.email);
+  const mobileNumber = formatValue(mentorDetails?.mobileNumber);
+  const emailHref =
+    officialEmail === "Not available" ? null : `mailto:${officialEmail}`;
+  const phoneHref = getPhoneHref(mentorDetails?.mobileNumber);
 
   return (
-    <Container
-      maxWidth="xl"
+    <Box
       sx={{
-        p: 8,
-        backgroundColor: theme.palette.background.default, 
-        color: theme.palette.text.primary, 
         minHeight: "100vh",
+        py: { xs: 3, md: 5 },
+        background: isLight
+          ? "linear-gradient(180deg, rgba(25,118,210,0.08) 0%, rgba(255,255,255,1) 45%)"
+          : "linear-gradient(180deg, rgba(34,45,68,0.7) 0%, rgba(14,20,36,1) 55%)",
       }}
     >
-      <Typography
-        variant="h4"
-        sx={{ textAlign: "center", mb: 3, color: theme.palette.text.primary }}
-      >
-        Mentor Details
-      </Typography>
-      {loading ? (
-        <Typography variant="h6" sx={{ textAlign: "center", color: "#aaa" }}>
-          Loading faculty profile...
-        </Typography>
-      ) : facultyProfile ? (
-        <TableContainer
-          component={Paper}
+      <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 } }}>
+        <Paper
+          elevation={0}
           sx={{
-            maxWidth: 600,
-            margin: "auto",
+            p: { xs: 2.5, sm: 3.5 },
+            borderRadius: 3,
             border: `1px solid ${theme.palette.divider}`,
-            backgroundColor: theme.palette.background.paper, 
+            backgroundColor: theme.palette.background.paper,
+            mb: 3,
           }}
         >
-          <Table>
-            <TableHead>
-              <TableRow sx={{ backgroundColor: isLight ? theme.palette.primary.main : theme.palette.info.main }}>
-                <TableCell
-                  colSpan={2}
-                  sx={{
-                    textAlign: "center",
-                    fontWeight: "bold",
-                    fontSize: "1.2rem",
-                    color: "#fff",
-                  }}
-                >
-                  Contact Mentor
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {[
-                { label: "Full Name", value: facultyProfile.fullName },
-                { label: "Department", value: facultyProfile.department },
-                { label: "Email", value: facultyProfile.email },
-                { label: "Mobile Number", value: facultyProfile.mobileNumber },
-                { label: "Cabin", value: facultyProfile.cabin },
-              ].map((row, index) => (
-                <TableRow key={index}>
-                  <TableCell
-                    sx={{
-                      fontWeight: "bold",
-                      color: theme.palette.text.secondary,
-                      borderBottom: `1px solid ${theme.palette.divider}`,
-                    }}
-                  >
-                    {row.label}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      color: theme.palette.text.primary,
-                      borderBottom: `1px solid ${theme.palette.divider}`,
-                    }}
-                  >
-                    {row.value}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      ) : (
-        <Typography variant="h6" sx={{ textAlign: "center", color: "red" }}>
-          No faculty profile found.
-        </Typography>
-      )}
-    </Container>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            justifyContent="space-between"
+          >
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                Mentor Details
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 0.8 }}>
+                Reach your assigned mentor quickly with the most relevant contact details.
+              </Typography>
+            </Box>
+            {!loading && !errorMessage ? (
+              <Chip
+                label={`Status: ${formatValue(mentorDetails?.status)}`}
+                icon={<EventAvailableIcon />}
+                color={mentorDetails?.status === "active" ? "success" : "default"}
+                variant="outlined"
+              />
+            ) : null}
+          </Stack>
+        </Paper>
+
+        {loading ? (
+          <Alert severity="info">Loading mentor profile...</Alert>
+        ) : errorMessage ? (
+          <Alert severity="warning">{errorMessage}</Alert>
+        ) : mentorDetails ? (
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <Card
+                sx={{
+                  borderRadius: 3,
+                  height: "100%",
+                  border: `1px solid ${theme.palette.divider}`,
+                  backgroundColor: theme.palette.background.paper,
+                }}
+              >
+                <CardContent>
+                  <Stack alignItems="center" spacing={1.5} sx={{ textAlign: "center" }}>
+                    <Avatar
+                      src={mentorAvatarSrc || undefined}
+                      alt={mentorFallbackName}
+                      sx={{
+                        width: 104,
+                        height: 104,
+                        bgcolor: isLight ? "primary.main" : "info.main",
+                        color: "common.white",
+                        fontSize: "2.2rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {!mentorAvatarSrc
+                        ? getAvatarFallbackText(mentorFallbackName)
+                        : null}
+                    </Avatar>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                      {formatValue(mentorDetails.fullName)}
+                    </Typography>
+                    <Chip
+                      label={formatValue(mentorDetails.roleName)}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                  </Stack>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <InfoRow
+                    icon={<BusinessIcon fontSize="small" color="action" />}
+                    label="Department"
+                    value={mentorDetails.department}
+                  />
+                  <InfoRow
+                    icon={<MeetingRoomIcon fontSize="small" color="action" />}
+                    label="Cabin"
+                    value={mentorDetails.cabin}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={8}>
+              <Card
+                sx={{
+                  borderRadius: 3,
+                  border: `1px solid ${theme.palette.divider}`,
+                  backgroundColor: theme.palette.background.paper,
+                  mb: 3,
+                }}
+              >
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>
+                    Contact Mentor
+                  </Typography>
+
+                  <Grid container spacing={1}>
+                    <Grid item xs={12} sm={6}>
+                      <InfoRow
+                        icon={<EmailIcon fontSize="small" color="action" />}
+                        label="Official Email"
+                        value={mentorDetails.email}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <InfoRow
+                        icon={<EmailIcon fontSize="small" color="action" />}
+                        label="Personal Email"
+                        value={mentorDetails.personalEmail}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <InfoRow
+                        icon={<LocalPhoneIcon fontSize="small" color="action" />}
+                        label="Mobile Number"
+                        value={mentorDetails.mobileNumber}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <InfoRow
+                        icon={<LocalPhoneIcon fontSize="small" color="action" />}
+                        label="Alternate Number"
+                        value={mentorDetails.alternatePhoneNumber}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2.5 }}>
+                    <Button
+                      variant="contained"
+                      startIcon={<EmailIcon />}
+                      href={emailHref || undefined}
+                      disabled={!emailHref}
+                    >
+                      Email Mentor
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<LocalPhoneIcon />}
+                      href={phoneHref || undefined}
+                      disabled={!phoneHref}
+                    >
+                      Call Mentor
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: 3,
+                  border: `1px solid ${theme.palette.divider}`,
+                  backgroundColor: theme.palette.background.paper,
+                }}
+              >
+                <Stack direction="row" spacing={1.2} alignItems="flex-start">
+                  <PersonIcon color="action" fontSize="small" sx={{ mt: 0.2 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Tip: Use official email for academic communication and call only during working hours.
+                  </Typography>
+                </Stack>
+              </Paper>
+            </Grid>
+          </Grid>
+        ) : (
+          <Alert severity="warning">No mentor details found.</Alert>
+        )}
+      </Container>
+    </Box>
   );
 };
 

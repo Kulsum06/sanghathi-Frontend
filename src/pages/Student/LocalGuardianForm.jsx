@@ -8,6 +8,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import api from "../../utils/axios";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
 const DEFAULT_VALUES = {
   firstName: "",
@@ -49,9 +50,10 @@ export default function LocalGuardianForm() {
     }
   }, [data, reset]);
 
-  // Show error snackbar for non-404 errors
+  // Show error snackbar for errors
   useEffect(() => {
     if (error) {
+      logger.error("Error fetching guardian details:", error);
       enqueueSnackbar("Error fetching guardian details", { variant: "error" });
     }
   }, [error, enqueueSnackbar]);
@@ -66,6 +68,7 @@ export default function LocalGuardianForm() {
       enqueueSnackbar("Guardian details saved successfully!", { variant: "success" });
       invalidate(); // refresh cache after save
     } catch (err) {
+      logger.error("Error saving guardian details:", err);
       enqueueSnackbar(
         err.response?.data?.message || "Error saving guardian details",
         { variant: "error" }
@@ -75,7 +78,7 @@ export default function LocalGuardianForm() {
 
   return (
     <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
-      <Card sx={{ p: 3 }}>
+      <Card sx={{ p: { xs: 2, sm: 3 } }}>
         <Typography variant="h5" gutterBottom>Local Guardian Details</Typography>
         <Divider sx={{ mb: 3 }} />
 
@@ -85,7 +88,7 @@ export default function LocalGuardianForm() {
           </Box>
         ) : (
           <>
-            <Grid container spacing={2}>
+            <Grid container spacing={{ xs: 2, md: 3 }}>
               {Object.keys(DEFAULT_VALUES).map((field) => (
                 <Grid item xs={12} md={field === "residenceAddress" ? 12 : 4} key={field}>
                   <RHFTextField
@@ -99,16 +102,29 @@ export default function LocalGuardianForm() {
               ))}
             </Grid>
 
-            <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
-              <Box display="flex" gap={1}>
-                <LoadingButton
-                  variant="outlined"
-                  onClick={() => reset(DEFAULT_VALUES)}
+            <Stack spacing={2} alignItems={{ xs: "stretch", sm: "flex-end" }} sx={{ mt: 3 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 1,
+                  width: { xs: "100%", sm: "auto" },
+                  flexDirection: { xs: "column-reverse", sm: "row" },
+                }}
+              >
+                <LoadingButton 
+                  variant="outlined" 
+                  onClick={() => reset(DEFAULT_VALUES)} 
                   disabled={isSubmitting}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
                 >
                   Reset
                 </LoadingButton>
-                <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
+                <LoadingButton 
+                  type="submit" 
+                  variant="contained" 
+                  loading={isSubmitting}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
+                >
                   Save
                 </LoadingButton>
               </Box>

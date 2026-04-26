@@ -20,6 +20,7 @@ export default function Settings() {
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [hardReloading, setHardReloading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const theme = useTheme();
@@ -95,6 +96,34 @@ export default function Settings() {
     }
   };
 
+  const handleHardReload = async () => {
+    setHardReloading(true);
+
+    try {
+      if (typeof window !== "undefined" && "caches" in window) {
+        const cacheKeys = await window.caches.keys();
+        await Promise.all(cacheKeys.map((key) => window.caches.delete(key)));
+      }
+
+      if (
+        typeof navigator !== "undefined" &&
+        "serviceWorker" in navigator
+      ) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+
+      const hardReloadUrl = new URL(window.location.href);
+      hardReloadUrl.searchParams.set("_hr", String(Date.now()));
+      window.location.replace(hardReloadUrl.toString());
+    } catch (reloadError) {
+      enqueueSnackbar("Could not clear cache automatically. Reloading now.", {
+        variant: "warning",
+      });
+      window.location.reload();
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom color={colorMode}>
@@ -160,6 +189,17 @@ export default function Settings() {
               disabled={loading}
             >
               Update Password
+            </Button>
+
+            <Button
+              type="button"
+              variant="outlined"
+              color={colorMode}
+              size="large"
+              onClick={handleHardReload}
+              disabled={hardReloading}
+            >
+              {hardReloading ? "Reloading..." : "Hard Reload App"}
             </Button>
           </Stack>
         </form>

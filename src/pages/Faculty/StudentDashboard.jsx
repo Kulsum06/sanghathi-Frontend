@@ -1,5 +1,5 @@
 import QuestionAnswerIcon from "@mui/icons-material/QuestionAnswer";
-import { Container, Grid, Typography, Box, useTheme, Paper } from "@mui/material";
+import { Container, Grid, Typography, Box, useTheme } from "@mui/material";
 import Page from "../../components/Page";
 import { Card, CardHeader, CardContent, CardActionArea } from "@mui/material";
 import { useState, useEffect } from "react"; // Import useEffect
@@ -34,10 +34,11 @@ import {
 import { blueGrey } from "@mui/material/colors";
 import { alpha } from "@mui/material/styles";
 
+import logger from "../../utils/logger.js";
 import { Link, useParams } from "react-router-dom"; // Import useParams
-import axios from "axios"; // Import axios
+import api from "../../utils/axios";
+import DashboardHeroCard from "../../components/dashboard/DashboardHeroCard";
 
-const BASE_URL = import.meta.env.VITE_API_URL;
 const StudentTile = ({ title, icon, link, menteeId }) => {
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
@@ -71,7 +72,7 @@ const StudentTile = ({ title, icon, link, menteeId }) => {
             justifyContent: "flex-start",
             flexDirection: "row",
             minHeight: "auto",
-            p: 3,
+            p: { xs: 2, sm: 3 },
             "&:hover": {
               backgroundColor: isLight 
                 ? alpha(theme.palette.primary.main, 0.12) 
@@ -84,10 +85,10 @@ const StudentTile = ({ title, icon, link, menteeId }) => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 64,
-              height: 64,
+              width: { xs: 52, sm: 64 },
+              height: { xs: 52, sm: 64 },
               borderRadius: '12px',
-              mr: 3,
+              mr: { xs: 2, sm: 3 },
               backgroundColor: isLight
                 ? alpha(theme.palette.primary.main, 0.12)
                 : alpha(theme.palette.info.main, 0.15),
@@ -147,24 +148,15 @@ const StudentDashboard = () => {
   useEffect(() => {
     const fetchMenteeData = async () => {
       try {
-        // Fetch the student profile
-        const profileResponse = await axios.get(
-          `${BASE_URL}/student-profiles/${menteeId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`
-            }
-          }
-        );
-        console.log("Student profile response:", profileResponse.data);
-        
-        let userData = profileResponse.data;
+        const profileResponse = await api.get(`/student-profiles/${menteeId}`);
+        logger.info("Student profile response:", profileResponse.data);
+        const userData = profileResponse.data?.data || profileResponse.data;
         
         // Skip the user endpoint since it's returning 500 error
         setMenteeData(userData);
       } catch (err) {
         setError("Error fetching mentee data.");
-        console.error(err);
+        logger.error(err);
       } finally {
         setLoading(false);
       }
@@ -176,14 +168,44 @@ const StudentDashboard = () => {
   }, [menteeId]); // Fetch data when menteeId changes
 
   if (loading) {
-    return <Typography>Loading Mentee Dashboard...</Typography>;
+    return (
+      <Page title="Mentee Dashboard">
+        <Box
+          sx={{
+            minHeight: "55vh",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            px: 2,
+            textAlign: "center",
+          }}
+        >
+          <Typography>Loading Mentee Dashboard...</Typography>
+        </Box>
+      </Page>
+    );
   }
 
   if (error) {
-    return <Typography color="error">{error}</Typography>;
+    return (
+      <Page title="Mentee Dashboard">
+        <Box
+          sx={{
+            minHeight: "55vh",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            px: 2,
+            textAlign: "center",
+          }}
+        >
+          <Typography color="error">{error}</Typography>
+        </Box>
+      </Page>
+    );
   }
 
-  console.log("Full menteeData structure:", menteeData);
+  logger.info("Full menteeData structure:", menteeData);
   
   // Get mentee name based on the student profile structure
   const getFullName = () => {
@@ -206,8 +228,14 @@ const StudentDashboard = () => {
   };
   
   const menteeName = getFullName();
+  const menteeHeroUser = {
+    name: menteeName,
+    profile: { photo: menteeData?.photo || null },
+    photo: menteeData?.photo || null,
+    avatar: menteeData?.avatar || null,
+  };
 
-  console.log("Extracted mentee name:", menteeName);
+  logger.info("Extracted mentee name:", menteeName);
   
   return (
     <Page title={`${menteeName}'s Dashboard`}>
@@ -224,118 +252,16 @@ const StudentDashboard = () => {
         <Container
           maxWidth="xl"
           sx={{
-            p: 2,
+            px: { xs: 1.5, sm: 3 },
+            py: 0,
           }}
         >
-          {isLight ? (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 4,
-                mb: 4,
-                mt: 1,
-                borderRadius: 3,
-                backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                backdropFilter: 'blur(20px)',
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
-              }}
-            >
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center',
-                  textAlign: 'center',
-                  mb: 3
-                }}
-              >
-                <Typography 
-                  variant="h4" 
-                  color="primary" 
-                  gutterBottom
-                  sx={{ 
-                    fontWeight: 'bold',
-                    position: 'relative',
-                    display: 'inline-block',
-                    '&:after': {
-                      content: '""',
-                      position: 'absolute',
-                      width: '40%',
-                      height: '4px',
-                      borderRadius: '2px',
-                      backgroundColor: theme.palette.primary.main,
-                      bottom: '-8px',
-                      left: '30%'
-                    }
-                  }}
-                >
-                  {menteeName}'s Dashboard
-                </Typography>
-                
-                <Typography 
-                  variant="body1" 
-                  color="text.secondary" 
-                  sx={{ maxWidth: '600px', mt: 3 }}
-                >
-                  View and manage all information related to your mentee from this dashboard.
-                </Typography>
-              </Box>
-            </Paper>
-          ) : (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 4,
-                mb: 4,
-                mt: 1,
-                borderRadius: 3,
-                backgroundColor: alpha(theme.palette.background.paper, 0.6),
-                backdropFilter: 'blur(10px)',
-                border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
-              }}
-            >
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center',
-                  textAlign: 'center',
-                  mb: 3
-                }}
-              >
-                <Typography 
-                  variant="h4" 
-                  color="info" 
-                  gutterBottom
-                  sx={{ 
-                    fontWeight: 'bold',
-                    position: 'relative',
-                    display: 'inline-block',
-                    '&:after': {
-                      content: '""',
-                      position: 'absolute',
-                      width: '40%',
-                      height: '4px',
-                      borderRadius: '2px',
-                      backgroundColor: theme.palette.info.main,
-                      bottom: '-8px',
-                      left: '30%'
-                    }
-                  }}
-                >
-                  {menteeName}'s Dashboard
-                </Typography>
-                
-                <Typography 
-                  variant="body1" 
-                  color="text.secondary" 
-                  sx={{ maxWidth: '600px', mt: 3 }}
-                >
-                  View and manage all information related to your mentee from this dashboard.
-                </Typography>
-              </Box>
-            </Paper>
-          )}
+          <DashboardHeroCard
+            user={menteeHeroUser}
+            fallbackName="Mentee"
+            dashboardTitle="Dashboard"
+            description="View and manage all information related to your mentee from this dashboard."
+          />
           
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6} md={6} lg={4}>
@@ -351,7 +277,7 @@ const StudentDashboard = () => {
               <StudentTile
                 title="Career review"
                 icon={<PersonIcon />}
-                link="/CareerReview/CareerReview"
+                link="/career-review"
                 menteeId={menteeId}
               />
             </Grid>
@@ -360,7 +286,7 @@ const StudentDashboard = () => {
               <StudentTile
                 title="Scorecard"
                 icon={<AssignmentIcon />}
-                link="/Scorecard/ScoreCard"
+                link="/scorecard"
                 menteeId={menteeId}
               />
             </Grid>
@@ -369,7 +295,7 @@ const StudentDashboard = () => {
               <StudentTile
                 title="Placement"
                 icon={<EmojiEventsIcon />}
-                link="/Placement/Placement"
+                link="/placement"
                 menteeId={menteeId}
               />
             </Grid>
@@ -413,14 +339,7 @@ const StudentDashboard = () => {
               <StudentTile
                 title="Offline Mentor-Mentee Conversation"
                 icon={<QuestionAnswerIcon />}
-                link={`/faculty/mentor-mentee-conversation/${menteeId}`}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={4}>
-              <StudentTile
-                title="Offline Mentor-Mentee Conversation"
-                icon={<QuestionAnswerIcon />}
-                link={`/faculty/mentor-mentee-conversation/${menteeId}`}
+                link="/mentor-mentee-conversation"
                 menteeId={menteeId}   // ✅ add this prop for consistency
               />
             </Grid>

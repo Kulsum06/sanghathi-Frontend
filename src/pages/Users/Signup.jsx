@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 
+import logger from "../../utils/logger.js";
 const BASE_URL = import.meta.env.VITE_API_URL;
 const Signup = () => {
   const [name, setName] = useState("");
@@ -29,10 +30,10 @@ const Signup = () => {
       <div>
       <h2>Signed up!</h2>
       </div>
-      console.log("User signed up:", response.data);
+      logger.info("User signed up:", response.data);
   
     } catch (error) {
-      console.error("Error during signup:", error);
+      logger.error("Error during signup:", error);
       setError("Signup failed, please try again.");
     }
   };

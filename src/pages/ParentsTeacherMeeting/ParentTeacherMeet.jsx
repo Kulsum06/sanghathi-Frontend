@@ -5,6 +5,7 @@ import api from "../../utils/axios";
 import { useForm } from "react-hook-form";
 import { Box, Grid, Card, Stack, Typography } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
+import logger from "../../utils/logger.js";
 import {
   FormProvider,
   RHFTextField,
@@ -65,7 +66,7 @@ export default function ParentTeacherMeet() {
       });
       reset();
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       enqueueSnackbar("An error occurred while processing the request", {
         variant: "error",
       });

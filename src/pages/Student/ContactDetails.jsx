@@ -8,6 +8,7 @@ import { Box, Grid, Card, Stack, FormControlLabel, Switch, Typography, Divider }
 import { LoadingButton } from "@mui/lab";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
 const DEFAULT_VALUES = {
   currentAddress: {
@@ -34,7 +35,7 @@ const DEFAULT_VALUES = {
   },
 };
 
-export default function ContactDetails({ userId: propUserId, colorMode }) {
+export default function ContactDetails({ userId: propUserId }) {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
@@ -73,7 +74,9 @@ export default function ContactDetails({ userId: propUserId, colorMode }) {
   }, [data, setValue]);
 
   useEffect(() => {
-    if (error) console.error("Error fetching contact details:", error);
+    if (error) {
+        logger.error("Error fetching contact details:", error);
+    }
   }, [error]);
 
   // Handle Same As Current Switch
@@ -87,19 +90,31 @@ export default function ContactDetails({ userId: propUserId, colorMode }) {
   };
 
   const onSubmit = async (formData) => {
-    if (!userId) { enqueueSnackbar("User ID is required", { variant: "error" }); return; }
+    if (!userId) { 
+        enqueueSnackbar("User ID is required", { variant: "error" }); 
+        return; 
+    }
     try {
-      await api.post("/v1/contact-details", { userId, currentAddress: formData.currentAddress, permanentAddress: formData.permanentAddress });
+      logger.info('Submitting contact details with userId:', userId);
+      const payload = { 
+        userId,
+        currentAddress: formData.currentAddress,
+        permanentAddress: formData.permanentAddress
+      };
+      
+      await api.post("/v1/contact-details", payload);
       enqueueSnackbar("Contact details saved successfully!", { variant: "success" });
       invalidate();
     } catch (error) {
-      enqueueSnackbar(error.response?.data?.message || error.message || "An error occurred while saving contact details", { variant: "error" });
+      logger.error("Error saving contact details:", error);
+      const errorMessage = error.response?.data?.message || error.message || "An error occurred while saving contact details";
+      enqueueSnackbar(errorMessage, { variant: "error" });
     }
   };
 
   return (
     <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
-      <Grid container spacing={2}>
+      <Grid container spacing={{ xs: 2, md: 3 }}>
         <Grid item xs={12} md={12}>
           <Typography variant="h5" gutterBottom>Contact Details</Typography>
           <Divider sx={{ mb: 3 }} />
@@ -107,7 +122,7 @@ export default function ContactDetails({ userId: propUserId, colorMode }) {
         
         {/* Current Address */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ p: 3 }}>
+          <Card sx={{ p: { xs: 2, sm: 3 } }}>
             <Stack spacing={2}>
               <Typography variant="h6">Current Address</Typography>
               {Object.keys(DEFAULT_VALUES.currentAddress).map((field) => (
@@ -119,9 +134,15 @@ export default function ContactDetails({ userId: propUserId, colorMode }) {
 
         {/* Permanent Address */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ p: 3 }}>
+          <Card sx={{ p: { xs: 2, sm: 3 } }}>
             <Stack spacing={2}>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                flexDirection={{ xs: "column", sm: "row" }}
+                gap={1}
+              >
                 <Typography variant="h6">Permanent Address</Typography>
                 <FormControlLabel
                   control={<Switch checked={sameAsCurrent} onChange={handleSwitchChange} />}
@@ -137,13 +158,29 @@ export default function ContactDetails({ userId: propUserId, colorMode }) {
 
         {/* Buttons */}
         <Grid item xs={12}>
-          <Card sx={{ p: 3, display: "flex", justifyContent: "flex-end", gap: 2 }}>
-            <LoadingButton variant="outlined" onClick={() => reset(DEFAULT_VALUES)} disabled={isSubmitting}>
-              Reset
-            </LoadingButton>
-            <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
-              Save
-            </LoadingButton>
+          <Card sx={{ p: { xs: 2, sm: 3 } }}>
+            <Stack
+              direction={{ xs: "column-reverse", sm: "row" }}
+              spacing={1}
+              justifyContent={{ xs: "stretch", sm: "flex-end" }}
+            >
+              <LoadingButton
+                variant="outlined"
+                onClick={() => reset(DEFAULT_VALUES)}
+                disabled={isSubmitting}
+                sx={{ width: { xs: "100%", sm: "auto" } }}
+              >
+                Reset
+              </LoadingButton>
+              <LoadingButton
+                type="submit"
+                variant="contained"
+                loading={isSubmitting}
+                sx={{ width: { xs: "100%", sm: "auto" } }}
+              >
+                Save
+              </LoadingButton>
+            </Stack>
           </Card>
         </Grid>
       </Grid>

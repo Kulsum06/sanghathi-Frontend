@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useCallback } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -9,8 +9,9 @@ import { Delete as DeleteIcon } from "@mui/icons-material";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
-const EMPTY_ROW = { clubName: "", eventTitle: "", eventDate: null };
+const EMPTY_ROW = { clubName: "", eventTitle: "", eventDate: "" };
 
 export default function ClubEvents() {
   const { enqueueSnackbar } = useSnackbar();
@@ -19,7 +20,7 @@ export default function ClubEvents() {
   const menteeId = searchParams.get("menteeId");
   const userId = menteeId || user?._id;
   const theme = useTheme();
-  const isLight = theme.palette.mode === "light";
+  const isLight = theme.palette.mode === 'light';
 
   const methods = useForm({ defaultValues: { clubevents: [{ ...EMPTY_ROW }] } });
   const { handleSubmit, reset, formState: { isSubmitting } } = methods;
@@ -39,27 +40,39 @@ export default function ClubEvents() {
         }));
         reset({ clubevents: formatted });
       } else {
+        logger.warn("No club events found for this user");
         reset({ clubevents: [{ ...EMPTY_ROW }] });
       }
     }
   }, [data, reset]);
 
   useEffect(() => {
-    if (error) enqueueSnackbar("Error fetching club event data", { variant: "error" });
+    if (error) {
+      logger.error("Error fetching club event data:", error);
+      enqueueSnackbar("Error fetching club event data", { variant: "error" });
+    }
   }, [error, enqueueSnackbar]);
 
   const onSubmit = async (formData) => {
     try {
-      await api.post("/career-counselling/clubevent", { clubevents: formData.clubevents, userId: user._id });
+      if (!user?._id) {
+        enqueueSnackbar("User information not available", { variant: "error" });
+        return;
+      }
+      
+      logger.info("Saving club events for user:", userId);
+      await api.post("/career-counselling/clubevent", { clubevents: formData.clubevents, userId: menteeId || user._id });
+      
       enqueueSnackbar("Club event data updated successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
+      logger.error("Error saving club event data:", err);
       enqueueSnackbar("An error occurred while processing the request", { variant: "error" });
     }
   };
 
   return (
-    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} disableAutoDraft>
       <Card sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>Events Attended under the clubs</Typography>
         <Grid container spacing={2}>
@@ -78,7 +91,9 @@ export default function ClubEvents() {
                 <RHFTextField name={`clubevents[${index}].eventDate`} label="Event Date" type="date" InputLabelProps={{ shrink: true }} fullWidth />
               </Grid>
               <Grid item xs={1}>
-                <IconButton color="error" onClick={() => remove(index)} sx={{ mt: 1 }}><DeleteIcon /></IconButton>
+                <IconButton color="error" onClick={() => remove(index)} sx={{ mt: 1 }}>
+                  <DeleteIcon />
+                </IconButton>
               </Grid>
             </Grid>
           ))}
@@ -90,9 +105,7 @@ export default function ClubEvents() {
           <Grid item xs={12}>
             <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
               <Box display="flex" gap={1}>
-                {import.meta.env.MODE === "development" && (
-                  <LoadingButton variant="outlined" color={isLight ? "primary" : "info"} onClick={() => reset({ clubevents: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
-                )}
+                <LoadingButton variant="outlined" color={isLight ? "primary" : "info"} onClick={() => reset({ clubevents: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
                 <LoadingButton type="submit" variant="contained" color={isLight ? "primary" : "info"} loading={isSubmitting || loading}>Save</LoadingButton>
               </Box>
             </Stack>

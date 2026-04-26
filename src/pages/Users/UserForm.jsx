@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 
+import logger from "../../utils/logger.js";
 // components
 import {
   FormProvider,
@@ -113,7 +114,7 @@ export default function UserForm({ editingUser }) {
         const response = await api.get(`/roles/${methods.getValues("role")}`);
         setRoleId(response.data._id); // Store the ObjectId
       } catch (error) {
-        console.error("Failed to fetch role ID:", error);
+        logger.error("Failed to fetch role ID:", error);
         enqueueSnackbar("Failed to fetch role information", {
           variant: "error",
         });
@@ -126,7 +127,7 @@ export default function UserForm({ editingUser }) {
   //handle form submission
   const onSubmit = useCallback(
     async (formData) => {
-      console.log("Form data:", formData);
+      logger.info("Form data:", formData);
       try {
         // Split the name into first and last name
         const nameParts = formData.name.trim().split(/\s+/);
@@ -149,11 +150,11 @@ export default function UserForm({ editingUser }) {
           userData.avatar = typeof avatar === "string" ? avatar : avatar.name;
         }
 
-        console.log("Creating user with data:", userData);
+        logger.info("Creating user with data:", userData);
         const userResponse = await api.post("/users", {
           ...userData,
         });
-        console.log("User Response to create User:", userResponse.data);
+        logger.info("User Response to create User:", userResponse.data);
 
         //Create a profile with userId
         if (userData.roleName == "student") {
@@ -170,20 +171,20 @@ export default function UserForm({ editingUser }) {
             mobileNumber: formData.phone,
           };
 
-          console.log("Creating profile with data:", profileData);
+          logger.info("Creating profile with data:", profileData);
 
           const profileResponse = await api.post(
             "/students/profile",
             profileData
           );
-          console.log("Profile response:", profileResponse.data);
+          logger.info("Profile response:", profileResponse.data);
 
           if (!profileResponse.data?.data?.studentProfile?._id) {
             throw new Error("Profile creation failed");
           }
 
           const profileId = profileResponse.data.data.studentProfile._id;
-          console.log("Profile ID", profileId);
+          logger.info("Profile ID", profileId);
           if (profileId) {
             // Update User with Profile ID
             await api.patch(`/users/${userResponse.data._id}`, {
@@ -195,17 +196,17 @@ export default function UserForm({ editingUser }) {
               const fetchResponse = await api.get(
                 `/student-profiles/${userResponse.data._id}`
               );
-              console.log("Fetched student profile:", fetchResponse.data);
+              logger.info("Fetched student profile:", fetchResponse.data);
 
               if (!fetchResponse.data) {
-                console.warn("Student profile response is empty");
+                logger.warn("Student profile response is empty");
                 enqueueSnackbar(
                   "User created, but profile may not be accessible immediately. Please refresh.",
                   { variant: "warning" }
                 );
               }
             } catch (fetchError) {
-              console.error("Error fetching new student profile:", fetchError);
+              logger.error("Error fetching new student profile:", fetchError);
               enqueueSnackbar(
                 "User created, but profile may not be accessible immediately. Please refresh.",
                 { variant: "warning" }
@@ -224,20 +225,20 @@ export default function UserForm({ editingUser }) {
             mobileNumber: formData.phone,
           };
 
-          console.log("Creating profile with data:", profileData);
+          logger.info("Creating profile with data:", profileData);
 
           const profileResponse = await api.post(
             "/faculty/profile",
             profileData
           );
-          console.log("Faculty Profile response:", profileResponse.data);
+          logger.info("Faculty Profile response:", profileResponse.data);
 
           if (!profileResponse.data?.data?.facultyProfile?._id) {
             throw new Error("Faculty Profile creation failed");
           }
 
           const profileId = profileResponse.data.data.facultyProfile._id;
-          console.log("Faculty Profile ID", profileId);
+          logger.info("Faculty Profile ID", profileId);
           if (profileId) {
             // Update User with Profile ID
             await api.patch(`/users/${userResponse.data._id}`, {
@@ -248,7 +249,7 @@ export default function UserForm({ editingUser }) {
         enqueueSnackbar("User created successfully!", { variant: "success" });
         reset();
       } catch (error) {
-        console.error("Detailed error:", error.response?.data);
+        logger.error("Detailed error:", error.response?.data);
         enqueueSnackbar(
           error.response?.data?.message ||
             error.message ||

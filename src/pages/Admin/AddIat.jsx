@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { 
   Box, 
   Button, 
@@ -20,9 +20,10 @@ import {
 } from '@mui/icons-material';
 import { alpha, useTheme } from "@mui/material/styles";
 import Papa from "papaparse";
-import axios from "axios";
-
-const BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../../utils/axios";
+import useDraftPersistence from "../../hooks/useDraftPersistence";
+import { resolveDraftScopeId } from "../../utils/draftScope";
+import { recordAdminUploadSession } from "../../utils/uploadHistory";
 
 const AddIat = () => {
   const theme = useTheme();
@@ -32,6 +33,86 @@ const AddIat = () => {
   const [errorCount, setErrorCount] = useState(0);
   const [errors, setErrors] = useState([]);
   const [file, setFile] = useState(null);
+
+  const normalizeHeader = (header = "") =>
+    header.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const parseScore = (value) => {
+    if (value === undefined || value === null || value === "") return undefined;
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
+
+  const getColumnIndex = (header) => {
+    const suffixMatch = header.match(/_(\d+)$/);
+    if (suffixMatch) return suffixMatch[1];
+
+    const normalized = normalizeHeader(header);
+    const indexedHeaderPatterns = [
+      /^(subjectcode|coursecode|subcode)(\d+)$/,
+      /^(subjectname|coursename)(\d+)$/,
+      /^(iat1|iat2|avg|average)(\d+)$/,
+    ];
+
+    for (const pattern of indexedHeaderPatterns) {
+      const match = normalized.match(pattern);
+      if (match) {
+        return match[2];
+      }
+    }
+
+    return "1";
+  };
+
+  const extractSubjectsFromRow = (row) => {
+    const subjectBuckets = {};
+
+    for (const [column, rawValue] of Object.entries(row)) {
+      if (rawValue === undefined || rawValue === null || rawValue === "") continue;
+
+      const normalized = normalizeHeader(column);
+      const bucketIndex = getColumnIndex(column);
+      if (!subjectBuckets[bucketIndex]) {
+        subjectBuckets[bucketIndex] = {};
+      }
+
+      if (normalized.includes("subjectcode") || normalized.includes("coursecode") || normalized.includes("subcode")) {
+        subjectBuckets[bucketIndex].subjectCode = String(rawValue).trim();
+      } else if (normalized.includes("subjectname") || normalized.includes("coursename")) {
+        subjectBuckets[bucketIndex].subjectName = String(rawValue).trim();
+      } else if (normalized.includes("iat1")) {
+        subjectBuckets[bucketIndex].iat1 = parseScore(rawValue);
+      } else if (normalized.includes("iat2")) {
+        subjectBuckets[bucketIndex].iat2 = parseScore(rawValue);
+      } else if (normalized === "avg" || normalized.includes("average")) {
+        subjectBuckets[bucketIndex].avg = parseScore(rawValue);
+      }
+    }
+
+    return Object.values(subjectBuckets).filter(
+      (subject) => subject.subjectCode && subject.subjectName
+    );
+  };
+
+  const getFieldValueFromRow = (row, aliases = []) => {
+    const normalizedAliases = aliases.map((alias) => normalizeHeader(alias));
+
+    for (const [column, rawValue] of Object.entries(row)) {
+      if (rawValue === undefined || rawValue === null || rawValue === "") continue;
+
+      const normalizedColumn = normalizeHeader(column);
+      const matched = normalizedAliases.some((alias) => {
+        const matcher = new RegExp(`^${alias}(\\d+)?$`);
+        return matcher.test(normalizedColumn);
+      });
+
+      if (matched) {
+        return typeof rawValue === "string" ? rawValue.trim() : rawValue;
+      }
+    }
+
+    return undefined;
+  };
 
   const downloadTemplate = () => {
     const headers = [
@@ -80,10 +161,17 @@ const AddIat = () => {
           return;
         }
       } else {
+        const headerTracker = {};
         const results = Papa.parse(content, {
           header: true,
           skipEmptyLines: true,
           transform: (value) => (value === "" ? undefined : value), //  Convert empty strings to undefined
+          transformHeader: (header) => {
+            const trimmed = header.trim();
+            const count = headerTracker[trimmed] || 0;
+            headerTracker[trimmed] = count + 1;
+            return count === 0 ? trimmed : `${trimmed}_${count + 1}`;
+          },
         });
         rows = results.data;
       }
@@ -96,31 +184,31 @@ const AddIat = () => {
     let success = 0;
     let errors = 0;
     const newErrors = [];
+    const affectedUserIds = new Set();
 
     // Group rows by USN and Semester
     const groupedData = {};
     for (const row of rows) {
-      if (!row.USN || !row.Sem || !row.SubjectCode || !row.SubjectName) {
-        newErrors.push(`Row with missing USN, Sem, SubjectCode, or SubjectName: ${JSON.stringify(row)}`);
+      const usn = getFieldValueFromRow(row, ["USN"]);
+      const semValue = getFieldValueFromRow(row, ["Sem", "Semester"]);
+      const semester = semValue !== undefined ? parseInt(semValue, 10) : undefined;
+      const rowSubjects = extractSubjectsFromRow(row);
+
+      if (!usn || !semester || Number.isNaN(semester) || rowSubjects.length === 0) {
+        newErrors.push(`Row with missing USN, Sem, or valid subject data: ${JSON.stringify(row)}`);
         errors++;
         continue; // Skip to the next row
       }
 
-      const key = `${row.USN}-${row.Sem}`;
+      const key = `${usn}-${semester}`;
       if (!groupedData[key]) {
         groupedData[key] = {
-          usn: row.USN,
-          semester: parseInt(row.Sem, 10),
+          usn,
+          semester,
           subjects: [],
         };
       }
-      groupedData[key].subjects.push({
-        subjectCode: row.SubjectCode,
-        subjectName: row.SubjectName,
-        iat1: row.IAT1 !== undefined ? parseInt(row.IAT1, 10) : undefined, // Parse, handle undefined
-        iat2: row.IAT2 !== undefined ? parseInt(row.IAT2, 10) : undefined,
-        avg: row.Avg !== undefined ? parseInt(row.Avg, 10) : undefined,
-      });
+      groupedData[key].subjects.push(...rowSubjects);
     }
 
     // Process each group (USN and Semester combination)
@@ -128,9 +216,7 @@ const AddIat = () => {
       const data = groupedData[key];
       try {
         // Get userId by USN (as before)
-        const response = await axios.get(
-          `${BASE_URL}/users/usn/${data.usn}`
-        );
+        const response = await api.get(`/users/usn/${data.usn}`);
         if (!response.data?.userId) {
           throw new Error(`User with USN ${data.usn} not found`);
         }
@@ -143,16 +229,24 @@ const AddIat = () => {
         };
 
         // Submit IAT data
-        await axios.post(
-          `${BASE_URL}/students/iat/${userId}`,
-          iatData
-        );
+        await api.post(`/students/iat/${userId}`, iatData);
         success++;
+        affectedUserIds.add(String(userId));
       } catch (error) {
         errors++;
         newErrors.push(`Error for USN ${data.usn}, Semester ${data.semester}: ${error.message}`);
       }
     }
+
+    await recordAdminUploadSession({
+      tabType: "add-iat-marks",
+      fileName: file?.name || "",
+      totalRows: rows.length,
+      successCount: success,
+      errorCount: errors,
+      errors: newErrors,
+      affectedUserIds: Array.from(affectedUserIds),
+    });
 
     setSuccessCount(success);
     setErrorCount(errors);
@@ -161,11 +255,11 @@ const AddIat = () => {
   };
 
   return (
-    <Container maxWidth="md">
+    <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
       <Paper
         elevation={3}
         sx={{
-          p: 4,
+          p: { xs: 2, sm: 4 },
           borderRadius: 2,
           backgroundColor: isLight 
             ? 'rgba(255, 255, 255, 0.8)'
@@ -203,7 +297,7 @@ const AddIat = () => {
             color="text.secondary"
             sx={{ maxWidth: 600, mx: 'auto' }}
           >
-            Upload a CSV file with Internal Assessment Test marks for students
+            Upload a row-wise CSV/JSON file with Internal Assessment Test marks for students.
           </Typography>
         </Box>
 
@@ -222,7 +316,7 @@ const AddIat = () => {
           </Typography>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Please ensure your CSV file has the following columns:
+            Please ensure each row represents one subject for one student and includes these columns:
           </Typography>
           
           <Box 
@@ -242,7 +336,12 @@ const AddIat = () => {
             <Typography variant="body2" color="text.secondary">• SubjectName - Course name</Typography>
             <Typography variant="body2" color="text.secondary">• IAT1 - First IAT marks</Typography>
             <Typography variant="body2" color="text.secondary">• IAT2 - Second IAT marks</Typography>
+            <Typography variant="body2" color="text.secondary">• Avg - Optional average field</Typography>
           </Box>
+
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Accepted mark values: numeric marks and AB/NE/ABSENT. If your file has repeated subject blocks in one row (wide-format sheet), use local script ingest.
+          </Alert>
 
           <Divider sx={{ my: 3 }} />
 

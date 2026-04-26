@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useCallback } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -9,6 +9,7 @@ import { Delete as DeleteIcon } from "@mui/icons-material";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
 const EMPTY_ROW = { eventType: "", eventTitle: "", description: "", eventDate: "" };
 
@@ -37,27 +38,39 @@ export default function Activity() {
         }));
         reset({ activity: formatted });
       } else {
+        logger.warn("No activity data found for this user");
         reset({ activity: [{ ...EMPTY_ROW }] });
       }
     }
   }, [data, reset]);
 
   useEffect(() => {
-    if (error) enqueueSnackbar("Error fetching activity data", { variant: "error" });
+    if (error) {
+      logger.error("Error fetching activity data:", error);
+      enqueueSnackbar("Error fetching activity data", { variant: "error" });
+    }
   }, [error, enqueueSnackbar]);
 
   const onSubmit = async (formData) => {
     try {
-      await api.post("/activity-data/activity", { activity: formData.activity, userId: user._id });
+      if (!user?._id) {
+        enqueueSnackbar("User information not available", { variant: "error" });
+        return;
+      }
+      
+      logger.info("Saving activity data for user:", userId);
+      await api.post("/activity-data/activity", { activity: formData.activity, userId: menteeId || user._id });
+      
       enqueueSnackbar("Activity data updated successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
+      logger.error("Error saving activity data:", err);
       enqueueSnackbar("An error occurred while processing the request", { variant: "error" });
     }
   };
 
   return (
-    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} disableAutoDraft>
       <Card sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>
           Event Participation Record in Sports, Cultural, Societal, etc by the Student
@@ -95,9 +108,7 @@ export default function Activity() {
           <Grid item xs={12}>
             <Stack direction="row" spacing={2} justifyContent="flex-end">
               <Box display="flex" gap={1}>
-                {import.meta.env.MODE === "development" && (
-                  <LoadingButton variant="outlined" onClick={() => reset({ activity: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
-                )}
+                <LoadingButton variant="outlined" onClick={() => reset({ activity: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
                 <LoadingButton type="submit" variant="contained" loading={isSubmitting || loading}>Save</LoadingButton>
               </Box>
             </Stack>

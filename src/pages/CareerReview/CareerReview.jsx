@@ -5,7 +5,10 @@ import useTabs from "../../hooks/useTabs";
 // components
 import Page from "../../components/Page";
 import Iconify from "../../components/Iconify";
-import React from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { AuthContext } from "../../context/AuthContext";
+import api from "../../utils/axios";
 
 import CareerCounselling from "./CareerCounselling";
 import Mooc from "./Mooc";
@@ -14,56 +17,122 @@ import ClubsSection from "./ClubsSection";
 import MiniProject from "./MiniProject";
 import Activity from "./Activity";
 import Hobbies from "./Hobbies";
+import Project from "../Placement/Project";
+
+const parseSemester = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const numeric = Number(value);
+  if (!Number.isNaN(numeric)) {
+    return numeric;
+  }
+
+  const match = String(value).match(/\d+/);
+  return match ? Number(match[0]) : null;
+};
 
 
 export default function CareerReview() {
-  const { currentTab, onChangeTab } = useTabs("Career Counselling");
+  const { currentTab, onChangeTab, setCurrentTab } = useTabs("Career Counselling");
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
+  const { user } = useContext(AuthContext);
+  const [searchParams] = useSearchParams();
+  const menteeId = searchParams.get("menteeId");
+  const [semester, setSemester] = useState(() => parseSemester(user?.sem));
+
+  useEffect(() => {
+    const targetUserId = menteeId || user?._id;
+
+    if (!targetUserId) {
+      setSemester(null);
+      return;
+    }
+
+    const semesterFromContext = !menteeId ? parseSemester(user?.sem) : null;
+    if (semesterFromContext) {
+      setSemester(semesterFromContext);
+      return;
+    }
+
+    const fetchSemester = async () => {
+      try {
+        const response = await api.get(`/student-profiles/${targetUserId}`);
+        const profile = response.data?.data || response.data;
+        const resolvedSemester =
+          parseSemester(profile?.sem) ??
+          parseSemester(profile?.semester) ??
+          parseSemester(profile?.currentSemester);
+
+        setSemester(resolvedSemester);
+      } catch (_error) {
+        setSemester(null);
+      }
+    };
+
+    fetchSemester();
+  }, [menteeId, user?._id, user?.sem]);
+
+  const isSemesterSix = semester === 6;
   
-  const ACCOUNT_TABS = [
-    {
-      value: "Career Counselling",
-      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
-      component: <CareerCounselling/>,
-    },
-    
-    {
-      value: "Clubs",
-      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
-      component: <ClubsSection />, 
-    },
+  const ACCOUNT_TABS = useMemo(() => {
+    const baseTabs = [
+      {
+        value: "Career Counselling",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <CareerCounselling />,
+      },
+      {
+        value: "Clubs",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <ClubsSection />,
+      },
+      {
+        value: "Professional Bodies",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <ProfessionalBodiesSection />,
+      },
+      {
+        value: "Mooc Courses",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <Mooc />,
+      },
+      {
+        value: "Mini Project",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <MiniProject />,
+      },
+      {
+        value: "Activity",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <Activity />,
+      },
+      {
+        value: "Hobbies",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <Hobbies />,
+      },
+    ];
 
-    {
-      value: "Professional Bodies",
-      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
-      component: <ProfessionalBodiesSection/>,
-    },
+    if (isSemesterSix) {
+      baseTabs.push({
+        value: "Technical Work",
+        icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
+        component: <Project />,
+      });
+    }
 
-    {
-      value: "Mooc Courses",
-      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
-      component: <Mooc/>,
-    },
-    
-    {
-      value: "Mini Project",
-      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
-      component: <MiniProject/>,
-    },
+    return baseTabs;
+  }, [isSemesterSix]);
 
-    {
-      value: "Activity",
-      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
-      component: <Activity/>,
-    },
-    {
-      value: "Hobbies",
-      icon: <Iconify icon={"ic:round-account-box"} width={20} height={20} />,
-      component: <Hobbies />,
-    },
-
-  ];
+  useEffect(() => {
+    const tabExists = ACCOUNT_TABS.some((tab) => tab.value === currentTab);
+    if (!tabExists) {
+      setCurrentTab("Career Counselling");
+    }
+  }, [ACCOUNT_TABS, currentTab, setCurrentTab]);
   
   return (
     <Page title="Career Review">

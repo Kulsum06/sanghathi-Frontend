@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useCallback } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -9,17 +9,18 @@ import { Delete as DeleteIcon } from "@mui/icons-material";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
-const EMPTY_ROW = { ProffessionalBodyName: "", eventTitle: "", eventDate: null };
+const EMPTY_ROW = { ProffessionalBodyName: "", eventTitle: "", eventDate: "" };
 
-export default function PBEvent() {
+export default function ProfessionalBodiesEvents() {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const menteeId = searchParams.get("menteeId");
   const userId = menteeId || user?._id;
   const theme = useTheme();
-  const isLight = theme.palette.mode === "light";
+  const isLight = theme.palette.mode === 'light';
 
   const methods = useForm({ defaultValues: { pbevents: [{ ...EMPTY_ROW }] } });
   const { handleSubmit, reset, formState: { isSubmitting } } = methods;
@@ -39,27 +40,42 @@ export default function PBEvent() {
         }));
         reset({ pbevents: formatted });
       } else {
+        logger.warn("No professional body event data found for this user");
         reset({ pbevents: [{ ...EMPTY_ROW }] });
       }
     }
   }, [data, reset]);
 
   useEffect(() => {
-    if (error) enqueueSnackbar("Error fetching professional body events", { variant: "error" });
+    if (error) {
+      logger.error("Error fetching professional body event data:", error);
+      enqueueSnackbar("Error fetching professional body events", { variant: "error" });
+    }
   }, [error, enqueueSnackbar]);
 
   const onSubmit = async (formData) => {
     try {
-      await api.post("/proffessional-body/professionalbodyevent", { userId: user._id, ProffessionalBodyEvent: formData.pbevents });
+      if (!user?._id) {
+        enqueueSnackbar("User information not available", { variant: "error" });
+        return;
+      }
+      
+      logger.info("Saving professional body events for user:", userId);
+      await api.post("/proffessional-body/professionalbodyevent", { 
+        userId: menteeId || user._id, 
+        ProffessionalBodyEvent: formData.pbevents 
+      });
+      
       enqueueSnackbar("PB Event data updated successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
+      logger.error("Error saving professional body event data:", err);
       enqueueSnackbar("Error updating PB Event data", { variant: "error" });
     }
   };
 
   return (
-    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} disableAutoDraft>
       <Card sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>Professional Bodies Events</Typography>
         <Grid container spacing={2}>
@@ -78,7 +94,9 @@ export default function PBEvent() {
                 <RHFTextField name={`pbevents[${index}].eventDate`} label="Event Date" type="date" InputLabelProps={{ shrink: true }} fullWidth />
               </Grid>
               <Grid item xs={1}>
-                <IconButton color="error" onClick={() => remove(index)} sx={{ mt: 1 }}><DeleteIcon /></IconButton>
+                <IconButton color="error" onClick={() => remove(index)} sx={{ mt: 1 }}>
+                  <DeleteIcon />
+                </IconButton>
               </Grid>
             </Grid>
           ))}
@@ -90,9 +108,7 @@ export default function PBEvent() {
           <Grid item xs={12}>
             <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
               <Box display="flex" gap={1}>
-                {import.meta.env.MODE === "development" && (
-                  <LoadingButton variant="outlined" color={isLight ? "primary" : "info"} onClick={() => reset({ pbevents: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
-                )}
+                <LoadingButton variant="outlined" color={isLight ? "primary" : "info"} onClick={() => reset({ pbevents: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
                 <LoadingButton type="submit" variant="contained" color={isLight ? "primary" : "info"} loading={isSubmitting || loading}>Save</LoadingButton>
               </Box>
             </Stack>

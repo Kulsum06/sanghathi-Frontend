@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useCallback } from "react";
 import { useSnackbar } from "notistack";
 import { useSearchParams } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
@@ -17,7 +17,12 @@ import {
   Divider,
 } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
-import { FormProvider, RHFTextField, RHFSelect } from "../../components/hook-form";
+import logger from "../../utils/logger.js";
+import {
+  FormProvider,
+  RHFTextField,
+  RHFSelect,
+} from "../../components/hook-form";
 import useApiCache from "../../hooks/useApiCache";
 
 const DEFAULT_VALUES = {
@@ -70,7 +75,9 @@ export default function AdmissionDetails() {
   }, [data, setValue]);
 
   useEffect(() => {
-    if (error) console.error("Error fetching admission details:", error);
+    if (error) {
+        logger.error("Error fetching admission details:", error);
+    }
   }, [error]);
 
   const onSubmit = async (formData) => {
@@ -94,7 +101,7 @@ export default function AdmissionDetails() {
       enqueueSnackbar("Admission details saved successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
-      console.error("Error saving admission details:", err);
+      logger.error("Error saving admission details:", err);
       enqueueSnackbar(err.response?.data?.message || "Failed to save admission details.", { variant: "error" });
     }
   };
@@ -102,12 +109,13 @@ export default function AdmissionDetails() {
   const documentsList = ["SSLC/X Marks Card", "PUC/XII Marks Card", "Caste Certificate", "Migration Certificate"];
 
   return (
-    <div>
       <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
-        <Grid container spacing={2}>
+        <Grid container spacing={{ xs: 2, md: 3 }}>
           <Grid item xs={12}>
-            <Card sx={{ p: 3 }}>
-              <Typography variant="h5" gutterBottom>Admission Details</Typography>
+            <Card sx={{ p: { xs: 2, sm: 3 } }}>
+              <Typography variant="h5" gutterBottom>
+                Admission Details
+              </Typography>
               <Divider sx={{ mb: 3 }} />
               <Box sx={{ display: "grid", rowGap: 3, columnGap: 2, gridTemplateColumns: { xs: "repeat(1, 1fr)", sm: "repeat(2, 1fr)" } }}>
                 <RHFTextField name="admissionYear" label="Admission Year" />
@@ -120,7 +128,9 @@ export default function AdmissionDetails() {
                 <RHFTextField name="collegeId" label="College ID Number" />
               </Box>
 
-              <Typography variant="h6" sx={{ mt: 3 }}>Change of Branch (if applicable)</Typography>
+              <Typography variant="h6" sx={{ mt: 3 }}>
+                Change of Branch (if applicable)
+              </Typography>
               <Divider sx={{ mb: 3 }} />
               <Box sx={{ display: "grid", rowGap: 3, columnGap: 2, gridTemplateColumns: { xs: "repeat(1, 1fr)", sm: "repeat(2, 1fr)" } }}>
                 <RHFTextField name="branchChange.year" label="Year of Change" />
@@ -152,8 +162,13 @@ export default function AdmissionDetails() {
                 </FormGroup>
               </FormControl>
 
-              <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
-                <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
+              <Stack spacing={2} alignItems={{ xs: "stretch", sm: "flex-end" }} sx={{ mt: 3 }}>
+                <LoadingButton
+                  type="submit"
+                  variant="contained"
+                  loading={isSubmitting}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
+                >
                   Save Changes
                 </LoadingButton>
               </Stack>
@@ -161,6 +176,5 @@ export default function AdmissionDetails() {
           </Grid>
         </Grid>
       </FormProvider>
-    </div>
   );
 }

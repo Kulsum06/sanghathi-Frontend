@@ -15,6 +15,7 @@ import MenuPopover from "../../components/MenuPopover";
 import IconButtonAnimate from "../../components/animate/IconButtonAnimate";
 import { AuthContext } from "../../context/AuthContext";
 
+import logger from "../../utils/logger.js";
 // ----------------------------------------------------------------------
 
 // ----------------------------------------------------------------------
@@ -27,33 +28,59 @@ export default function AccountPopover() {
   const { enqueueSnackbar } = useSnackbar();
   const [open, setOpen] = useState(null);
 
-  const studentlink = "/student/profile";
-  const facultylink = "/faculty/FacultyProfile";
-  const adminlink = "/admin/dashboard";
-  const hodlink = "/hod/dashboard";
+  const studentHomeLink = "/";
+  const facultyHomeLink = "/faculty/dashboard";
+  const adminHomeLink = "/admin/dashboard";
+  const hodHomeLink = "/hod/dashboard";
+  const directorHomeLink = "/director/dashboard";
+
+  const studentProfileLink = "/student/profile";
+  const facultyProfileLink = "/faculty/profile";
+  const adminProfileLink = "/admin/dashboard";
+  const hodProfileLink = "/hod/dashboard";
+  const directorProfileLink = "/director/dashboard";
+
+  const getHomeLink = (role) => {
+    switch (role) {
+      case "admin":
+        return adminHomeLink;
+      case "hod":
+        return hodHomeLink;
+      case "director":
+        return directorHomeLink;
+      case "faculty":
+        return facultyHomeLink;
+      case "student":
+        return studentHomeLink;
+      default:
+        return "/";
+    }
+  };
 
   const getprofileconfig = (role) => {
     switch (role) {
       case "admin":
-        return adminlink;
-        case "hod":
-        return hodlink;
+        return adminProfileLink;
+      case "hod":
+        return hodProfileLink;
+      case "director":
+        return directorProfileLink;
       case "faculty":
-        return facultylink;
+        return facultyProfileLink;
       case "student":
-        return studentlink;
-      
+        return studentProfileLink;
       default:
         return null;
     }
   };
 
+  const homeLink = getHomeLink(user?.roleName);
   const profile = getprofileconfig(user?.roleName); // ✅ safe now that user exists
 
   const MENU_OPTIONS = [
     {
       label: "Home",
-      linkTo: "/admin/dashboard",
+      linkTo: homeLink,
     },
     {
       label: "Profile",
@@ -82,7 +109,7 @@ export default function AccountPopover() {
         handleClose();
       }
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       enqueueSnackbar("Unable to logout!", { variant: "error" });
     }
   };

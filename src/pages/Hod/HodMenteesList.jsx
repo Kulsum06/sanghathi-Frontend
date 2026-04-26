@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import {
   Table,
   TableBody,
@@ -26,39 +25,34 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PersonIcon from "@mui/icons-material/Person";
 import SchoolIcon from "@mui/icons-material/School";
 import Page from "../../components/Page";
+import api from "../../utils/axios";
+import TableRowsSkeleton from "../../components/skeletons/TableRowsSkeleton";
+import useMenteesData from "../../hooks/useMenteesData";
+import { getAvatarSrc, getAvatarFallbackText } from "../../utils/avatarResolver";
+import useResponsive from "../../hooks/useResponsive";
 
-const BASE_URL = import.meta.env.VITE_API_URL;
-
-const fetchStudentProfiles = async (userId) => {
-  try {
-    const response = await axios.get(
-      `${BASE_URL}/student-profiles/${userId}`
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Error fetching student profile:", error);
-    return null;
-  }
-};
+import logger from "../../utils/logger.js";
 
 const HodMenteesList = () => {
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
+  const isMobile = useResponsive("down", "sm");
   const { mentorId } = useParams();
-  const [mentees, setMentees] = useState([]);
-  const [profiles, setProfiles] = useState({});
+  const { mentees, loading, error } = useMenteesData(mentorId, {
+    enabled: Boolean(mentorId),
+  });
   const [mentorInfo, setMentorInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [mentorInfoError, setMentorInfoError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchMentorInfo = async () => {
       try {
-        const response = await axios.get(`${BASE_URL}/users/${mentorId}`);
+        const response = await api.get(`/users/${mentorId}`);
         setMentorInfo(response.data.data.user);
       } catch (err) {
-        console.error("Error fetching mentor info:", err);
+        logger.error("Error fetching mentor info:", err);
+        setMentorInfoError("Unable to load mentor details.");
       }
     };
 
@@ -67,54 +61,10 @@ const HodMenteesList = () => {
     }
   }, [mentorId]);
 
-  useEffect(() => {
-    const fetchMentees = async () => {
-      try {
-        const response = await axios.get(
-          `${BASE_URL}/mentorship/${mentorId}/mentees`
-        );
-        setMentees(response.data.mentees);
-      } catch (err) {
-        setError("No mentees found for this mentor.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (mentorId) {
-      fetchMentees();
-    }
-  }, [mentorId]);
-
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      const profileData = {};
-      for (const mentee of mentees) {
-        const data = await fetchStudentProfiles(mentee._id);
-        if (data) {
-          profileData[mentee._id] = data;
-        }
-      }
-      setProfiles(profileData);
-    };
-
-    if (mentees.length > 0) {
-      fetchProfiles();
-    }
-  }, [mentees]);
-
-  if (loading) {
+  if (error || mentorInfoError) {
     return (
       <Page title="View Mentees">
-        <Typography>Loading mentees...</Typography>
-      </Page>
-    );
-  }
-
-  if (error) {
-    return (
-      <Page title="View Mentees">
-        <Typography color="error">{error}</Typography>
+        <Typography color="error">{error || mentorInfoError}</Typography>
       </Page>
     );
   }
@@ -126,7 +76,7 @@ const HodMenteesList = () => {
           sx={{ 
             borderBottom: 1, 
             borderColor: 'divider',
-            px: 3,
+            px: { xs: 2, sm: 3 },
             py: 2
           }}
         >
@@ -151,7 +101,15 @@ const HodMenteesList = () => {
               <Typography color="text.primary">Mentees</Typography>
             </Breadcrumbs>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: { xs: 'stretch', sm: 'center' },
+                flexDirection: { xs: 'column', sm: 'row' },
+                gap: { xs: 1, sm: 0 },
+              }}
+            >
               <Box>
                 <Typography variant="h6" component="h1" sx={{ fontWeight: 500 }}>
                   {mentorInfo?.name}'s Mentees
@@ -164,6 +122,8 @@ const HodMenteesList = () => {
                 variant="outlined"
                 startIcon={<ArrowBackIcon />}
                 onClick={() => navigate('/hod/mentors')}
+                size={isMobile ? "small" : "medium"}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 Back to Mentors
               </Button>
@@ -171,30 +131,34 @@ const HodMenteesList = () => {
           </Stack>
         </Box>
 
-        <CardContent>
-          <TableContainer component={Paper} elevation={0}>
-            <Table>
+        <CardContent sx={{ px: { xs: 1.5, sm: 3 } }}>
+          <TableContainer component={Paper} elevation={0} sx={{ overflowX: "auto" }}>
+            <Table sx={{ minWidth: { xs: 760, md: "100%" } }}>
               <TableHead sx={{ backgroundColor: isLight ? theme.palette.grey[100] : "#2a2d32" }}>
                 <TableRow>
-                  <TableCell>Avatar</TableCell>
                   <TableCell>Name</TableCell>
                   <TableCell>USN</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Phone</TableCell>
+                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Email</TableCell>
+                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>Phone</TableCell>
                   <TableCell>Department</TableCell>
                   <TableCell>Semester</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {mentees.length === 0 ? (
+                {loading ? (
+                  <TableRowsSkeleton columns={7} rows={8} />
+                ) : mentees.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ color: theme.palette.text.primary }}>
+                    <TableCell colSpan={7} align="center" sx={{ color: theme.palette.text.primary }}>
                       No mentees allotted to this mentor.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  mentees.map((mentee) => (
+                  mentees.map((mentee) => {
+                    const avatarSrc = getAvatarSrc(mentee);
+
+                    return (
                     <TableRow 
                       key={mentee._id} 
                       hover
@@ -206,34 +170,38 @@ const HodMenteesList = () => {
                         }
                       }}
                     >
-                      <TableCell>
-                        <Avatar 
-                          sx={{ 
-                            backgroundColor: isLight 
-                              ? theme.palette.primary.main 
-                              : theme.palette.info.main 
-                          }}
-                        >
-                          {mentee.name?.charAt(0).toUpperCase()}
-                        </Avatar>
+                      <TableCell sx={{ color: theme.palette.text.primary }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                          <Avatar 
+                            alt={mentee.name}
+                            src={avatarSrc || undefined}
+                            sx={{ 
+                              width: 34,
+                              height: 34,
+                              backgroundColor: isLight 
+                                ? theme.palette.primary.main 
+                                : theme.palette.info.main 
+                            }}
+                          >
+                            {!avatarSrc ? getAvatarFallbackText(mentee.name) : null}
+                          </Avatar>
+                          <Typography variant="body2" fontWeight={500}>
+                            {mentee.name}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell sx={{ color: theme.palette.text.primary }}>
-                        <Typography variant="body2" fontWeight={500}>
-                          {mentee.name}
-                        </Typography>
+                        {mentee.profile?.usn || "N/A"}
                       </TableCell>
-                      <TableCell sx={{ color: theme.palette.text.primary }}>
-                        {profiles[mentee._id]?.usn || "N/A"}
-                      </TableCell>
-                      <TableCell sx={{ color: theme.palette.text.primary }}>
+                      <TableCell sx={{ color: theme.palette.text.primary, display: { xs: "none", sm: "table-cell" } }}>
                         {mentee.email}
                       </TableCell>
-                      <TableCell sx={{ color: theme.palette.text.primary }}>
+                      <TableCell sx={{ color: theme.palette.text.primary, display: { xs: "none", md: "table-cell" } }}>
                         {mentee.phone}
                       </TableCell>
                       <TableCell sx={{ color: theme.palette.text.primary }}>
                         <Chip 
-                          label={profiles[mentee._id]?.department || "N/A"}
+                          label={mentee.profile?.department || "N/A"}
                           size="small"
                           icon={<SchoolIcon />}
                           sx={{
@@ -244,21 +212,23 @@ const HodMenteesList = () => {
                         />
                       </TableCell>
                       <TableCell sx={{ color: theme.palette.text.primary }}>
-                        {profiles[mentee._id]?.sem || "N/A"}
+                        {mentee.profile?.sem || "N/A"}
                       </TableCell>
                       <TableCell align="center">
                         <Button
                           variant="contained"
                           color={isLight ? "primary" : "info"}
-                          size="small"
+                          size={isMobile ? "small" : "medium"}
                           onClick={() => navigate(`/hod/mentee-profile/${mentee._id}`)}
                           startIcon={<PersonIcon />}
+                          sx={{ whiteSpace: "nowrap" }}
                         >
                           View Dashboard
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

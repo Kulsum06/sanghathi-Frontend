@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useCallback } from "react";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -9,8 +9,9 @@ import { Delete as DeleteIcon } from "@mui/icons-material";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 import { useSearchParams } from "react-router-dom";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
-const EMPTY_ROW = { title: "", manHours: "", startDate: null, completedDate: null };
+const EMPTY_ROW = { title: "", manHours: "", startDate: "", completedDate: "" };
 
 export default function MiniProject() {
   const { enqueueSnackbar } = useSnackbar();
@@ -38,27 +39,39 @@ export default function MiniProject() {
         }));
         reset({ miniproject: formatted });
       } else {
+        logger.warn("No miniproject data found for this user");
         reset({ miniproject: [{ ...EMPTY_ROW }] });
       }
     }
   }, [data, reset]);
 
   useEffect(() => {
-    if (error) enqueueSnackbar("Error fetching mini project data", { variant: "error" });
+    if (error) {
+      logger.error("Error fetching mini project data:", error);
+      enqueueSnackbar("Error fetching mini project data", { variant: "error" });
+    }
   }, [error, enqueueSnackbar]);
 
   const onSubmit = async (formData) => {
     try {
-      await api.post("/project/miniproject", { miniproject: formData.miniproject, userId: user._id });
+      if (!user?._id) {
+        enqueueSnackbar("User information not available", { variant: "error" });
+        return;
+      }
+      
+      logger.info("Saving mini projects for user:", userId);
+      await api.post("/project/miniproject", { miniproject: formData.miniproject, userId: menteeId || user._id });
+      
       enqueueSnackbar("Mini project data updated successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
+      logger.error("Error saving mini project data:", err);
       enqueueSnackbar("An error occurred while processing the request", { variant: "error" });
     }
   };
 
   return (
-    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} disableAutoDraft>
       <Card sx={{ p: 3 }}>
         <Grid container spacing={2}>
           {fields.map((item, index) => (
@@ -93,9 +106,7 @@ export default function MiniProject() {
           <Grid item xs={12}>
             <Stack direction="row" spacing={2} justifyContent="flex-end">
               <Box display="flex" gap={1}>
-                {import.meta.env.MODE === "development" && (
-                  <LoadingButton variant="outlined" onClick={() => reset({ miniproject: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
-                )}
+                <LoadingButton variant="outlined" onClick={() => reset({ miniproject: [{ ...EMPTY_ROW }] })}>Reset</LoadingButton>
                 <LoadingButton type="submit" variant="contained" loading={isSubmitting || loading}>Save</LoadingButton>
               </Box>
             </Stack>

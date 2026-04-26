@@ -1,23 +1,33 @@
-import { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useCallback } from "react";
 import {
+  Alert,
   Box,
+  Container,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Select,
-  MenuItem,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { AuthContext } from "../../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import useStudentSemester from "../../hooks/useStudentSemester";
 import useApiCache from "../../hooks/useApiCache";
+import logger from "../../utils/logger.js";
 
 const Iat = () => {
   const { user } = useContext(AuthContext);
+  const theme = useTheme();
+  const isSmDown = useMediaQuery(theme.breakpoints.down("sm"));
   const [searchParams] = useSearchParams();
   const menteeId = searchParams.get('menteeId');
   const userId = menteeId || user?._id;
@@ -39,6 +49,8 @@ const Iat = () => {
           const defaultSem = studentSemester && data.semesters.find(s => s.semester === studentSemester)
             ? studentSemester
             : data.semesters[0].semester;
+          
+          logger.info('[Iat] Setting semester to:', defaultSem, '(studentSemester:', studentSemester, ', first available:', data.semesters[0].semester, ')');
           setSelectedSemester(defaultSem);
         }
       } else {
@@ -80,20 +92,19 @@ const Iat = () => {
   };
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Typography variant="h4" component="h1" gutterBottom align="center">
+    <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
+      <Typography variant={isSmDown ? "h5" : "h4"} component="h1" gutterBottom align="center">
         IAT Marks Report
       </Typography>
 
-      {error && <Typography color="error" align="center">Failed to fetch IAT data</Typography>}
-
-      <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
-        <label>
-          Select Semester:
+      <Stack direction={{ xs: "column", sm: "row" }} sx={{ mb: 2, justifyContent: "center" }}>
+        <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 220 } }}>
+          <InputLabel id="iat-semester-select-label">Semester</InputLabel>
           <Select
-            value={selectedSemester || ''}
+            labelId="iat-semester-select-label"
+            value={selectedSemester ?? ""}
             onChange={handleSemesterChange}
-            sx={{ ml: 1, minWidth: 120 }}
+            label="Semester"
           >
             {iatData.map((sem) => (
               <MenuItem key={sem.semester} value={sem.semester}>
@@ -101,44 +112,70 @@ const Iat = () => {
               </MenuItem>
             ))}
           </Select>
-        </label>
-      </Box>
+        </FormControl>
+      </Stack>
 
-      <TableContainer sx={{ border: "1px solid gray" }}>
-        <Table>
+      {loading && (
+        <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 3 }}>
+          Loading IAT marks...
+        </Typography>
+      )}
+
+      {!loading && error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Failed to fetch IAT data
+        </Alert>
+      )}
+
+      {!loading && !error && (
+      <TableContainer sx={{ border: "1px solid gray", overflowX: "auto" }}>
+        <Table sx={{ minWidth: { xs: 640, md: "100%" } }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ border: "1px solid gray" }}>Subject Code</TableCell>
-              <TableCell sx={{ border: "1px solid gray" }}>Subject Name</TableCell>
-              <TableCell sx={{ border: "1px solid gray" }}>IAT 1 (Out of 50)</TableCell>
-              <TableCell sx={{ border: "1px solid gray" }}>IAT 2 (Out of 50)</TableCell>
-              <TableCell sx={{ border: "1px solid gray" }}>IAT Avg (Out of 50)</TableCell>
+              <TableCell sx={{ border: "1px solid gray", display: { xs: "none", sm: "table-cell" } }}>
+                Subject Code
+              </TableCell>
+              <TableCell sx={{ border: "1px solid gray" }}>
+                Subject Name
+              </TableCell>
+              <TableCell sx={{ border: "1px solid gray" }}>IAT 1(Out of 50)</TableCell>
+              <TableCell sx={{ border: "1px solid gray" }}>IAT 2(Out of 50)</TableCell>
+              <TableCell sx={{ border: "1px solid gray" }}>IAT Avg(Out of 50)</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
+            {getSubjectsForSemester().length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">Loading...</TableCell>
+                <TableCell colSpan={5} align="center" sx={{ border: "1px solid gray", py: 3 }}>
+                  No IAT data available for the selected semester.
+                </TableCell>
               </TableRow>
-            ) : getSubjectsForSemester().length > 0 ? (
-              getSubjectsForSemester().map((subject) => (
-                <TableRow key={subject.subjectCode}>
-                  <TableCell sx={{ border: "1px solid gray" }}>{subject.subjectCode}</TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>{subject.subjectName}</TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>{getIatMarks(subject.subjectCode, 1)}</TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>{getIatMarks(subject.subjectCode, 2)}</TableCell>
-                  <TableCell sx={{ border: "1px solid gray" }}>{getIatMarks(subject.subjectCode, 3)}</TableCell>
-                </TableRow>
-              ))
             ) : (
-              <TableRow>
-                <TableCell colSpan={5} align="center">No IAT marks data available.</TableCell>
+            getSubjectsForSemester().map((subject) => (
+              <TableRow key={subject.subjectCode}>
+                <TableCell sx={{ border: "1px solid gray", display: { xs: "none", sm: "table-cell" } }}>
+                  {subject.subjectCode}
+                </TableCell>
+                <TableCell sx={{ border: "1px solid gray" }}>
+                  {subject.subjectName}
+                </TableCell>
+                <TableCell sx={{ border: "1px solid gray" }}>
+                    {getIatMarks(subject.subjectCode, 1)}
+                </TableCell>
+                <TableCell sx={{ border: "1px solid gray" }}>
+                    {getIatMarks(subject.subjectCode, 2)}
+                </TableCell>
+                <TableCell sx={{ border: "1px solid gray" }}>
+                    {getIatMarks(subject.subjectCode, 3)}
+                </TableCell>
               </TableRow>
+            ))
             )}
           </TableBody>
         </Table>
       </TableContainer>
-    </Box>
+      )}
+    </Container>
   );
 };
 

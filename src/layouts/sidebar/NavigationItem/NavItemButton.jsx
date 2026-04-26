@@ -23,7 +23,9 @@ const NavItemButton = ({
     <ListItemButton
       onClick={onToggleDropdown}
       sx={{
-        borderRadius: "8px",
+        borderRadius: "10px",
+        padding: { xs: "12px 10px", sm: "8px 10px" },
+        minHeight: { xs: "52px", sm: "44px" },
         backgroundColor:
           active === lcText 
             ? isLight 
@@ -34,19 +36,32 @@ const NavItemButton = ({
           active === lcText
             ? theme.palette[colorMode].main
             : theme.palette.text.primary,
+        transition: theme.transitions.create(
+          ["background-color", "color"],
+          {
+            duration: theme.transitions.duration.shorter,
+          }
+        ),
         "&:hover": {
           backgroundColor: theme.palette.action.hover,
           color: theme.palette[colorMode].main,
+        },
+        "&:active": {
+          backgroundColor: isLight
+            ? theme.palette.grey[200]
+            : theme.palette.action.selected,
         },
       }}
     >
       <ListItemIcon
         sx={{
-          ml: "1rem",
+          ml: "0.5rem",
+          minWidth: { xs: "40px", sm: "40px" },
           color:
             active === lcText
               ? theme.palette[colorMode].main
               : theme.palette.text.primary,
+          transition: "color 0.2s ease",
         }}
       >
         {icon}
@@ -55,8 +70,8 @@ const NavItemButton = ({
         primary={
           <Typography
             sx={{
-              fontSize: "0.9rem",
-              fontWeight: active === lcText ? 600 : theme.typography.body2.fontWeight,
+              fontSize: { xs: "0.95rem", sm: "0.9rem" },
+              fontWeight: active === lcText ? 600 : 500,
               color: active === lcText
                 ? theme.palette[colorMode].main
                 : theme.palette.text.primary,
@@ -65,6 +80,9 @@ const NavItemButton = ({
             {text}
           </Typography>
         }
+        sx={{
+          mx: { xs: "0.5rem", sm: "0" },
+        }}
       />
       {isDropdown && (
         <CollapsibleIcon

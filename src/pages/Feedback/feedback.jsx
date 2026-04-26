@@ -8,6 +8,7 @@ import { Box, Grid, Card, Stack, Typography, Divider } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 
+import logger from "../../utils/logger.js";
 const DEFAULT_VALUES = {
   issues: "",
   features: "",
@@ -48,7 +49,7 @@ export default function FeedbackForm() {
         });
         setExistingFeedback(data);
       } catch (err) {
-        console.error("Error fetching feedback:", err);
+        logger.error("Error fetching feedback:", err);
         // maybe show snackbar or ignore
       } finally {
         setIsDataFetched(true);
@@ -77,7 +78,7 @@ export default function FeedbackForm() {
       enqueueSnackbar("Feedback saved successfully!", { variant: "success" });
       // optionally reset form or refetch
     } catch (error) {
-      console.error("Error saving feedback:", error);
+      logger.error("Error saving feedback:", error);
       const errorMessage =
         error.response?.data?.message || error.message || "An error occurred while saving feedback";
       enqueueSnackbar(errorMessage, { variant: "error" });

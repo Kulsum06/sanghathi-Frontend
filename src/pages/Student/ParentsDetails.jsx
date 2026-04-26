@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useCallback } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useSnackbar } from "notistack";
 import api from "../../utils/axios";
@@ -6,7 +6,11 @@ import { useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { Box, Grid, Card, Stack, Typography, Divider } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
-import { FormProvider, RHFTextField } from "../../components/hook-form";
+import logger from "../../utils/logger.js";
+import {
+  FormProvider,
+  RHFTextField,
+} from "../../components/hook-form";
 import useApiCache from "../../hooks/useApiCache";
 
 const DEFAULT_VALUES = {
@@ -64,7 +68,8 @@ export default function ParentsDetails() {
 
   useEffect(() => {
     if (error) {
-      enqueueSnackbar("Error fetching parent details", { variant: "error" });
+        logger.error("Error fetching parent details:", error);
+        enqueueSnackbar("Error fetching parent details", { variant: "error" });
     }
   }, [error, enqueueSnackbar]);
 
@@ -74,23 +79,28 @@ export default function ParentsDetails() {
         enqueueSnackbar("User ID is required", { variant: "error" });
         return;
       }
-      await api.post("/parent-details", { ...formData, userId });
+      
+      logger.info("Form data:", formData);
+      const requestData = {
+        ...formData,
+        userId,
+      };
+      
+      await api.post("/parent-details", requestData);
       enqueueSnackbar("Parent details saved successfully!", { variant: "success" });
       invalidate();
-    } catch (err) {
-      enqueueSnackbar(
-        err.response?.data?.message || err.message || "An error occurred while saving parent details",
-        { variant: "error" }
-      );
+    } catch (error) {
+      logger.error("Error saving parent details:", error);
+      const errorMessage = error.response?.data?.message || error.message || "An error occurred while saving parent details";
+      enqueueSnackbar(errorMessage, { variant: "error" });
     }
   };
 
   return (
-    <div>
       <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
-        <Grid container spacing={2}>
+        <Grid container spacing={{ xs: 2, md: 3 }}>
           <Grid item xs={12} md={12}>
-            <Card sx={{ p: 3 }}>
+            <Card sx={{ p: { xs: 2, sm: 3 } }}>
               <Typography variant="h5" gutterBottom>Parents Details</Typography>
               <Divider sx={{ mb: 3 }} />
 
@@ -128,8 +138,8 @@ export default function ParentsDetails() {
           {!loading && (
             <>
               <Grid item xs={12} md={6}>
-                <Card sx={{ p: 3 }}>
-                  <Stack spacing={3} sx={{ mt: 1 }}>
+                <Card sx={{ p: { xs: 2, sm: 3 } }}>
+                  <Stack spacing={{ xs: 2, sm: 3 }} sx={{ mt: 1}}>
                     <Typography variant="h6">Father's Details</Typography>
                     <RHFTextField name="fatherOccupation" label="Father's Occupation" fullWidth required />
                     <RHFTextField name="fatherOrganization" label="Father's Organization" fullWidth />
@@ -142,8 +152,8 @@ export default function ParentsDetails() {
                 </Card>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Card sx={{ p: 3 }}>
-                  <Stack spacing={3} sx={{ mt: 1 }}>
+                <Card sx={{ p: { xs: 2, sm: 3 } }}>
+                  <Stack spacing={{ xs: 2, sm: 3 }} sx={{ mt: 1}}>
                     <Typography variant="h6">Mother's Details</Typography>
                     <RHFTextField name="motherOccupation" label="Mother's Occupation" fullWidth required />
                     <RHFTextField name="motherOrganization" label="Mother's Organization" fullWidth />
@@ -156,10 +166,15 @@ export default function ParentsDetails() {
                 </Card>
               </Grid>
               <Grid item xs={12} md={12}>
-                <Card sx={{ p: 3 }}>
-                  <Stack spacing={3} alignItems="flex-end">
-                    <Box display="flex" gap={1}>
-                      <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
+                <Card sx={{ p: { xs: 2, sm: 3 } }}>
+                  <Stack spacing={2} alignItems={{ xs: "stretch", sm: "flex-end" }}>
+                    <Box sx={{ display: "flex", gap: 1, width: { xs: "100%", sm: "auto" } }}>
+                      <LoadingButton
+                        type="submit"
+                        variant="contained"
+                        loading={isSubmitting}
+                        sx={{ width: { xs: "100%", sm: "auto" } }}
+                      >
                         Save
                       </LoadingButton>
                     </Box>
@@ -170,6 +185,5 @@ export default function ParentsDetails() {
           )}
         </Grid>
       </FormProvider>
-    </div>
   );
 }

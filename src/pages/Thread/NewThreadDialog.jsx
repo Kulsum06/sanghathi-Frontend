@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-
+import React, { useState } from "react";
 import { useSnackbar } from "notistack";
 import {
+  Autocomplete,
   Box,
   Button,
   Dialog,
@@ -13,23 +13,31 @@ import {
   InputLabel,
   List,
   ListItem,
-  ListItemAvatar,
   ListItemText,
   Select,
   TextField,
   Typography,
   MenuItem,
   Avatar,
-  useTheme,
 } from "@mui/material";
 import { Close, Search } from "@mui/icons-material";
+import {
+  getAvatarSrc,
+  getAvatarFallbackText,
+} from "../../utils/avatarResolver";
 
-const NewThreadDialog = ({ open, onClose, users, currentUser, onSave, colorMode = 'primary' }) => {
-  const theme = useTheme();
+import logger from "../../utils/logger.js";
+
+const NewThreadDialog = ({
+  open,
+  onClose,
+  users,
+  currentUser,
+  onSave,
+  colorMode = "primary",
+}) => {
   const { enqueueSnackbar } = useSnackbar();
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredUsers, setFilteredUsers] = useState([]);
-  const isLight = theme.palette.mode === 'light';
 
   const [newThreadData, setNewThreadData] = useState({
     title: "",
@@ -40,16 +48,20 @@ const NewThreadDialog = ({ open, onClose, users, currentUser, onSave, colorMode 
 
   const TOPICS = ["general", "attendance", "performance", "well-being"];
 
-  useEffect(() => {
-    if (searchTerm.trim()) {
-      const filtered = users.filter((user) =>
-        user.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
-      );
-      setFilteredUsers(filtered);
-    } else {
-      setFilteredUsers([]);
-    }
-  }, [searchTerm]);
+  const selectableUsers = users.filter(
+    (user) =>
+      user._id !== currentUser._id &&
+      !newThreadData.participants.some(
+        (participant) => participant._id === user._id
+      )
+  );
+
+  const membersForDisplay =
+    currentUser?.roleName === "faculty"
+      ? newThreadData.participants.filter(
+          (participant) => participant._id !== currentUser._id
+        )
+      : newThreadData.participants;
 
   const handleCloseDialog = () => {
     onClose();
@@ -57,17 +69,13 @@ const NewThreadDialog = ({ open, onClose, users, currentUser, onSave, colorMode 
       title: "",
       topic: "",
       author: currentUser._id,
-      participants: [{ _id: currentUser._id, name: "Current User" }],
+      participants: [{ _id: currentUser._id, name: currentUser.name }],
     });
     setSearchTerm("");
   };
 
   const handleNewThreadChange = (e) => {
     setNewThreadData({ ...newThreadData, [e.target.name]: e.target.value });
-  };
-
-  const handleSearchTermChange = (event) => {
-    setSearchTerm(event.target.value);
   };
 
   const handleAddMember = (member) => {
@@ -79,7 +87,6 @@ const NewThreadDialog = ({ open, onClose, users, currentUser, onSave, colorMode 
     }
 
     setSearchTerm("");
-    setFilteredUsers([]);
   };
 
   const handleDeselectMember = (memberId) => {
@@ -97,13 +104,12 @@ const NewThreadDialog = ({ open, onClose, users, currentUser, onSave, colorMode 
     onSave(newThreadData)
       .then(() => {
         enqueueSnackbar("Thread created successfully!", { variant: "success" });
+        handleCloseDialog();
       })
       .catch((error) => {
         enqueueSnackbar("Error creating thread!", { variant: "error" });
-        console.error("Error creating new thread:", error);
+        logger.error("Error creating new thread:", error);
       });
-
-    handleCloseDialog();
   };
 
   return (
@@ -136,19 +142,18 @@ const NewThreadDialog = ({ open, onClose, users, currentUser, onSave, colorMode 
             />
           </Box>
           <Box sx={{ py: 1 }}>
-            <InputLabel shrink htmlFor="tag-select" color={colorMode}>
+            <InputLabel shrink htmlFor="topic-select" color={colorMode}>
               Topic
             </InputLabel>
-
             <Select
-              name="top"
+              name="topic"
               value={newThreadData.topic}
               onChange={handleNewThreadChange}
               inputProps={{ name: "topic", id: "topic-select" }}
               fullWidth
               color={colorMode}
             >
-              <MenuItem value="Topic" disabled>
+              <MenuItem value="" disabled>
                 Topic
               </MenuItem>
               {TOPICS.map((topic, index) => (
@@ -159,71 +164,129 @@ const NewThreadDialog = ({ open, onClose, users, currentUser, onSave, colorMode 
             </Select>
           </Box>
           <Box sx={{ py: 1 }}>
-            <TextField
-              label="Search user"
-              value={searchTerm}
-              onChange={handleSearchTermChange}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton color={colorMode}>
-                      <Search />
-                    </IconButton>
-                  </InputAdornment>
-                ),
+            <Autocomplete
+              value={null}
+              options={selectableUsers}
+              getOptionLabel={(option) => option?.name || ""}
+              inputValue={searchTerm}
+              onInputChange={(_event, newInputValue) => {
+                setSearchTerm(newInputValue);
               }}
-              fullWidth
-              color={colorMode}
+              onChange={(_event, selectedUser) => {
+                if (selectedUser) {
+                  handleAddMember(selectedUser);
+                }
+              }}
+              filterOptions={(options, state) => {
+                const normalized = state.inputValue.trim().toLowerCase();
+                if (!normalized) {
+                  return options;
+                }
+
+                return options.filter((user) =>
+                  `${user.name || ""} ${user.email || ""}`
+                    .toLowerCase()
+                    .includes(normalized)
+                );
+              }}
+              noOptionsText={
+                searchTerm.trim()
+                  ? "No matching users found"
+                  : "Start typing to search users"
+              }
+              renderOption={(props, option) => {
+                const optionAvatarSrc = getAvatarSrc(option);
+
+                return (
+                  <Box component="li" {...props} key={option._id}>
+                    <Avatar
+                      src={optionAvatarSrc || undefined}
+                      alt={option.name}
+                      sx={{ width: 30, height: 30, mr: 1.2 }}
+                    >
+                      {!optionAvatarSrc
+                        ? getAvatarFallbackText(option.name)
+                        : null}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {option.name}
+                      </Typography>
+                      {option.email ? (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.email}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  </Box>
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Search user"
+                  color={colorMode}
+                  helperText="Select users from the dropdown"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton color={colorMode} edge="end" tabIndex={-1}>
+                          <Search />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
             />
           </Box>
         </Box>
-        <List>
-          {filteredUsers.map((user) => (
-            <ListItem
-              key={user._id}
-              onClick={() => handleAddMember(user)}
-              sx={{
-                "&:hover": { backgroundColor: theme.palette.action.hover },
-              }}
-            >
-              <ListItemAvatar>
-                <Avatar>{user.name[0]}</Avatar>
-              </ListItemAvatar>
-              <ListItemText primary={user.name} />
-            </ListItem>
-          ))}
-        </List>
+
         <Typography variant="subtitle1" mt={2}>
           Members:
         </Typography>
         <List>
-          {newThreadData.participants.map((participant) => (
-            <ListItem
-              key={participant._id}
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center" }}>
-                <Avatar>{participant.name[0]}</Avatar>
-                <ListItemText sx={{ ml: 2 }} primary={participant.name} />
-              </Box>
-              {participant._id !== currentUser._id && (
-                <IconButton
-                  onClick={() => handleDeselectMember(participant._id)}
-                >
-                  <Close />
-                </IconButton>
-              )}
-            </ListItem>
-          ))}
+          {membersForDisplay.map((participant) => {
+            const participantAvatarSrc = getAvatarSrc(participant);
+
+            return (
+              <ListItem
+                key={participant._id}
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <Avatar
+                    alt={participant.name}
+                    src={participantAvatarSrc || undefined}
+                  >
+                    {!participantAvatarSrc
+                      ? getAvatarFallbackText(participant.name)
+                      : null}
+                  </Avatar>
+                  <ListItemText sx={{ ml: 2 }} primary={participant.name} />
+                </Box>
+                {participant._id !== currentUser._id && (
+                  <IconButton
+                    onClick={() => handleDeselectMember(participant._id)}
+                  >
+                    <Close />
+                  </IconButton>
+                )}
+              </ListItem>
+            );
+          })}
         </List>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleCloseDialog}>Cancel</Button>
-        <Button onClick={handleSave} color={colorMode}>Save</Button>
+        <Button onClick={handleSave} color={colorMode}>
+          Save
+        </Button>
       </DialogActions>
     </Dialog>
   );

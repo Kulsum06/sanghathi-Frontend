@@ -8,6 +8,7 @@ import { Box, Grid, Card, Stack, Typography, Divider } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
 
+import logger from "../../utils/logger.js";
 // Rename for complaints
 const DEFAULT_VALUES = {
   complaintSubject: "",
@@ -48,7 +49,7 @@ export default function ComplaintForm() {
         });
         setExistingComplaint(data);
       } catch (err) {
-        console.error("Error fetching complaint:", err);
+        logger.error("Error fetching complaint:", err);
       } finally {
         setIsDataFetched(true);
       }
@@ -74,7 +75,7 @@ export default function ComplaintForm() {
 
       enqueueSnackbar("Complaint submitted successfully!", { variant: "success" });
     } catch (error) {
-      console.error("Error submitting complaint:", error);
+      logger.error("Error submitting complaint:", error);
       const errorMessage =
         error.response?.data?.message || error.message || "An error occurred while submitting complaint";
       enqueueSnackbar(errorMessage, { variant: "error" });

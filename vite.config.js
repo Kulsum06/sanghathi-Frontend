@@ -19,8 +19,6 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       rollupOptions: {
         output: {
-          manualChunks: undefined,
-          inlineDynamicImports: true,
           compact: true
         }
       }

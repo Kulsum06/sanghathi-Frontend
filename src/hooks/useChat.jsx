@@ -6,6 +6,7 @@ import ChatContext from "../context/ChatContext";
 
 import api from "../utils/axios";
 
+import logger from "../utils/logger.js";
 export default function ChatProvider({ children }) {
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
@@ -14,7 +15,7 @@ export default function ChatProvider({ children }) {
   const socket = useRef();
 
   const { user } = useContext(AuthContext);
-  console.log(user);
+  logger.info(user);
 
   useEffect(() => {
     socket.current = io(SOCKET_URL);
@@ -36,17 +37,23 @@ export default function ChatProvider({ children }) {
   }, [arrivalMessage, currentChat]);
 
   const joinChat = async (chat) => {
-    console.log("Joining room....");
+    logger.info("Joining room....");
     setCurrentChat(chat);
     if (!chat) return;
-    console.log(chat);
+    logger.info(chat);
     try {
-      const response = await api.get(`/messages/${chat._id}/?type=private`);
+      const response = await api.get(`/messages/${chat._id}`, {
+        params: {
+          type: "private",
+          page: 1,
+          limit: 100,
+        },
+      });
       const { data } = response.data;
       setMessages(data.messages);
       socket.current.emit("join_room", chat.conversationId);
     } catch (err) {
-      console.log(err);
+      logger.info(err);
     }
   };
 
@@ -75,7 +82,7 @@ export default function ChatProvider({ children }) {
       const { data } = response.data;
       setMessages([...messages, data.message]);
     } catch (err) {
-      console.log(err);
+      logger.info(err);
     }
   };
 

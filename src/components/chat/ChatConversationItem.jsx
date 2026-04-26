@@ -8,6 +8,10 @@ import {
   ListItemButton,
   useTheme,
 } from "@mui/material";
+import {
+  getAvatarSrc,
+  getAvatarFallbackText,
+} from "../../utils/avatarResolver";
 
 ChatConversationItem.propTypes = {
   conversation: PropTypes.object.isRequired,
@@ -28,6 +32,7 @@ export default function ChatConversationItem({
   const otherParticipant = conversation.participants.find(
     (participant) => participant._id !== currentUserId
   );
+  const avatarSrc = getAvatarSrc(otherParticipant);
 
   return (
     <ListItemButton
@@ -47,11 +52,13 @@ export default function ChatConversationItem({
       onClick={onSelectConversation}
     >
       <ListItemAvatar>
-        <Avatar alt={otherParticipant.name} />
+        <Avatar alt={otherParticipant?.name} src={avatarSrc || undefined}>
+          {!avatarSrc ? getAvatarFallbackText(otherParticipant?.name) : null}
+        </Avatar>
       </ListItemAvatar>
 
       <ListItemText
-        primary={otherParticipant.name}
+        primary={otherParticipant?.name || "Unknown"}
         primaryTypographyProps={{ noWrap: true, variant: "subtitle2" }}
       />
     </ListItemButton>

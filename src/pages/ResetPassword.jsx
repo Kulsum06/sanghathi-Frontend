@@ -1,77 +1,131 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Box, Button, Container, TextField, Typography, CircularProgress } from "@mui/material";
+import {
+  Box,
+  Button,
+  Card,
+  CircularProgress,
+  Container,
+  Link,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import Page from "../components/Page";
-import axios from "axios";
+import api from "../utils/axios";
 
-const ResetPassword = () => {
+import logger from "../utils/logger.js";
+
+export default function ResetPassword() {
   const { token } = useParams();
   const navigate = useNavigate();
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!token) {
+      enqueueSnackbar("Reset token is missing from the URL.", {
+        variant: "error",
+      });
+      return;
+    }
+
+    if (password.length < 8) {
+      enqueueSnackbar("Password must be at least 8 characters.", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (password !== passwordConfirm) {
+      enqueueSnackbar("Passwords do not match.", { variant: "warning" });
+      return;
+    }
 
     try {
-      await axios.patch(`${import.meta.env.VITE_API_URL}/users/resetPassword/${token}`, {
+      setIsSubmitting(true);
+      await api.patch(`/users/resetPassword/${token}`, {
         password,
         passwordConfirm,
       });
 
-      enqueueSnackbar("Password reset successful. Please login.", { variant: "success" });
-      navigate("/login");
-    } catch (err) {
-      enqueueSnackbar(err.response?.data?.message || "Failed to reset password", { variant: "error" });
+      setIsCompleted(true);
+      enqueueSnackbar("Password reset successful. Please sign in.", {
+        variant: "success",
+      });
+    } catch (error) {
+      logger.error("Reset password request failed", error);
+      enqueueSnackbar(
+        error.message || "Reset link is invalid or expired. Request a new link.",
+        { variant: "error" }
+      );
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
     <Page title="Reset Password">
-      <Container maxWidth="sm">
-        <Box
-          component="form"
-          onSubmit={handleSubmit}
-          sx={{ mt: 8, display: "flex", flexDirection: "column", gap: 3 }}
-        >
-          <Typography variant="h4" align="center">Reset Password</Typography>
+      <Container maxWidth="sm" sx={{ py: { xs: 6, md: 10 } }}>
+        <Card sx={{ p: { xs: 3, md: 4 } }}>
+          <Stack spacing={3} component="form" onSubmit={handleSubmit}>
+            <Typography variant="h4">Reset Password</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Set a new password for your account.
+            </Typography>
 
-          <TextField
-            label="New Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            fullWidth
-          />
+            <TextField
+              label="New Password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+              fullWidth
+              required
+              disabled={isSubmitting || isCompleted}
+            />
 
-          <TextField
-            label="Confirm New Password"
-            type="password"
-            value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
-            required
-            fullWidth
-          />
+            <TextField
+              label="Confirm New Password"
+              type="password"
+              value={passwordConfirm}
+              onChange={(event) => setPasswordConfirm(event.target.value)}
+              autoComplete="new-password"
+              fullWidth
+              required
+              disabled={isSubmitting || isCompleted}
+            />
 
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : null}
-          >
-            {loading ? "Resetting..." : "Reset Password"}
-          </Button>
-        </Box>
+            {isCompleted ? (
+              <Button variant="contained" onClick={() => navigate("/login")}>
+                Go to Sign In
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={isSubmitting}
+                startIcon={isSubmitting ? <CircularProgress size={18} /> : null}
+              >
+                {isSubmitting ? "Updating..." : "Update Password"}
+              </Button>
+            )}
+
+            <Box>
+              <Link component={RouterLink} to="/login" underline="hover">
+                Back to Sign In
+              </Link>
+            </Box>
+          </Stack>
+        </Card>
       </Container>
     </Page>
   );
-};
-
-export default ResetPassword;
+}

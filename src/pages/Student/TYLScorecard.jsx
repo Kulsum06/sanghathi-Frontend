@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import {
   Box,
+  Container,
   Tabs,
   Tab,
   Paper,
@@ -18,6 +19,8 @@ import {
   MenuItem,
   CircularProgress,
   Alert,
+  Stack,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Assessment as AssessmentIcon,
@@ -28,10 +31,12 @@ import { useSnackbar } from 'notistack';
 import api from '../../utils/axios';
 import { useSearchParams } from 'react-router-dom';
 import useApiCache from '../../hooks/useApiCache';
+import logger from "../../utils/logger.js";
 
 const TYLScorecard = () => {
   const [tabValue, setTabValue] = useState(0);
   const theme = useTheme();
+  const isSmDown = useMediaQuery(theme.breakpoints.down('sm'));
   const isLight = theme.palette.mode === 'light';
   const colorMode = isLight ? 'primary' : 'info';
   const { user } = useContext(AuthContext);
@@ -40,7 +45,7 @@ const TYLScorecard = () => {
   const menteeId = searchParams.get('menteeId');
   const userId = menteeId || user?._id;
 
-  const [tylScores, setTYLScores] = useState([]);
+  const [tylsScores, setTYLScores] = useState([]);
   const [selectedSemester, setSelectedSemester] = useState(1);
 
   const isFaculty = user?.roleName === "faculty";
@@ -111,15 +116,26 @@ const TYLScorecard = () => {
       return;
     }
     try {
+      const userId = menteeId || user?._id;
+      if (!userId) {
+        enqueueSnackbar("User ID is missing", { variant: "error" });
+        return;
+      }
+      
       const scoresObject = {};
       parameters.forEach(param => {
-        const targetInput = document.querySelector(`input[name="${param}-target"]`);
-        const actualInput = document.querySelector(`input[name="${param}-actual"]`);
         scoresObject[param] = {
-          target: targetInput ? targetInput.value : "",
-          actual: actualInput ? actualInput.value : ""
+          target: getCurrentSemesterScores(param, 'target')?.toString() || "",
+          actual: getCurrentSemesterScores(param, 'actual')?.toString() || ""
         };
       });
+      
+      logger.info("Saving TYL scores:", {
+        userId,
+        semester: selectedSemester,
+        scores: scoresObject
+      });
+      
       await api.post("/tyl-scores", {
         userId,
         semester: selectedSemester,
@@ -128,6 +144,7 @@ const TYLScorecard = () => {
       enqueueSnackbar("TYL scores saved successfully!", { variant: "success" });
       invalidate();
     } catch (error) {
+      logger.error("Error saving TYL scores:", error);
       enqueueSnackbar(`Error saving TYL scores: ${error.response?.data?.message || error.message}`, { variant: "error" });
     }
   };
@@ -148,16 +165,29 @@ const TYLScorecard = () => {
   const tableHeadCellStyle = { ...tableCellStyle, fontWeight: 'bold', backgroundColor: theme.palette.mode === 'light' ? theme.palette.grey[100] : theme.palette.grey[800], color: theme.palette.text.primary };
 
   const getCurrentSemesterScores = (parameter, type) => {
-    if (!Array.isArray(tylScores) || tylScores.length === 0) return "";
-    const semesterData = tylScores.find(sem => sem.semester === selectedSemester);
+    if (!Array.isArray(tylsScores) || tylsScores.length === 0) return "";
+    const semesterData = tylsScores.find(sem => sem.semester === selectedSemester);
     if (!semesterData || !semesterData.scores || !semesterData.scores[parameter]) return "";
     return semesterData.scores[parameter][type] || "";
   };
 
   return (
-    <Box sx={{ p: 2, maxWidth: 1200, mx: 'auto' }}>
-      <Paper elevation={1} sx={{ p: 3, mb: 3, backgroundColor: theme.palette.background.paper }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center" color={colorMode}>
+    <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
+      <Paper
+        elevation={1}
+        sx={{
+          p: { xs: 2, sm: 3 },
+          mb: 3,
+          backgroundColor: theme.palette.background.paper,
+        }}
+      >
+        <Typography 
+          variant={isSmDown ? "h5" : "h4"}
+          component="h1" 
+          gutterBottom 
+          align="center" 
+          color={colorMode}
+        >
           TYL Scorecard
         </Typography>
 
@@ -167,42 +197,70 @@ const TYLScorecard = () => {
           </Alert>
         )}
 
-        {(!loading && (!tylScores || tylScores.length === 0)) && (
+        {(!loading && (!tylsScores || tylsScores.length === 0)) && (
           <Alert severity="info" sx={{ mb: 2 }}>
             No scores available. Please add scores.
           </Alert>
         )}
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs value={tabValue} onChange={handleTabChange} centered sx={{ '& .MuiTab-root': { minHeight: 48, minWidth: 120, '&.Mui-selected': { color: isLight ? theme.palette.primary.main : theme.palette.info.main } } }}>
-            <Tab icon={<AssessmentIcon />} label="TYL Scores" iconPosition="start" />
-            <Tab icon={<DescriptionIcon />} label="Description" iconPosition="start" />
+          <Tabs 
+            value={tabValue} 
+            onChange={handleTabChange}
+            centered
+            sx={{
+              '& .MuiTab-root': {
+                minHeight: 48,
+                minWidth: { xs: 100, sm: 120 },
+                px: { xs: 1.25, sm: 2 },
+                '&.Mui-selected': {
+                  color: isLight ? theme.palette.primary.main : theme.palette.info.main,
+                },
+              },
+            }}
+          >
+            <Tab 
+              icon={<AssessmentIcon />} 
+              label="TYL Scores" 
+              iconPosition="start"
+            />
+            <Tab 
+              icon={<DescriptionIcon />} 
+              label="Description" 
+              iconPosition="start"
+            />
           </Tabs>
         </Box>
 
         {tabValue === 0 && (
-          <Paper elevation={1} sx={{ p: 3, backgroundColor: theme.palette.background.paper }}>
+          <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 }, backgroundColor: theme.palette.background.paper }}>
             <Typography variant="h5" gutterBottom align="center" sx={{ mb: 2, color: isLight ? theme.palette.primary.dark : theme.palette.info.main }}>
               TYL Scores
             </Typography>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-              <Select value={selectedSemester} onChange={(e) => setSelectedSemester(e.target.value)} sx={{ minWidth: 120 }} size="small" color={colorMode}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center', mb: 3 }}>
+              <Select
+                value={selectedSemester}
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                sx={{ minWidth: { xs: '100%', sm: 160 } }}
+                size="small"
+                color={colorMode}
+              >
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
                   <MenuItem key={sem} value={sem}>
                     Semester {sem}
                   </MenuItem>
                 ))}
               </Select>
-            </Box>
+            </Stack>
 
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
                 <CircularProgress color={colorMode} />
               </Box>
             ) : (
-              <TableContainer sx={{ mb: 2, border: `1px solid ${theme.palette.divider}` }}>
-                <Table>
+              <TableContainer sx={{ mb: 2, border: `1px solid ${theme.palette.divider}`, overflowX: 'auto' }}>
+                <Table sx={{ minWidth: { xs: 560, md: '100%' } }}>
                   <TableHead>
                     <TableRow>
                       <TableCell sx={tableHeadCellStyle}>Parameter</TableCell>
@@ -229,7 +287,13 @@ const TYLScorecard = () => {
 
             {isFaculty && (
               <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Button variant="contained" color={colorMode} onClick={handleSave} disabled={loading}>
+                <Button 
+                  variant="contained" 
+                  color={colorMode}
+                  onClick={handleSave}
+                  disabled={loading}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
+                >
                   {loading ? <CircularProgress size={24} /> : 'Save TYL Scores'}
                 </Button>
               </Box>
@@ -238,10 +302,12 @@ const TYLScorecard = () => {
         )}
 
         {tabValue === 1 && (
-          <Paper elevation={1} sx={{ p: 3, backgroundColor: theme.palette.background.paper }}>
-            <Typography variant="h5" gutterBottom align="center" sx={{ mb: 2, color: isLight ? theme.palette.primary.dark : theme.palette.info.main }}>Skills Description</Typography>
-            <TableContainer sx={{ mb: 2, border: `1px solid ${theme.palette.divider}` }}>
-              <Table>
+          <Paper elevation={1} sx={{ p: { xs: 2, sm: 3 }, backgroundColor: theme.palette.background.paper }}>
+            <Typography variant="h5" gutterBottom align="center" sx={{ mb: 2, color: isLight ? theme.palette.primary.dark : theme.palette.info.main }}>
+              Skills Description
+            </Typography>
+            <TableContainer sx={{ mb: 2, border: `1px solid ${theme.palette.divider}`, overflowX: 'auto' }}>
+              <Table sx={{ minWidth: { xs: 980, md: '100%' } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell sx={tableHeadCellStyle}>Skills</TableCell>
@@ -267,7 +333,7 @@ const TYLScorecard = () => {
           </Paper>
         )}
       </Paper>
-    </Box>
+    </Container>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useContext } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Box,
   Table,
@@ -29,23 +29,32 @@ import ClearIcon from "@mui/icons-material/Clear";
 import PeopleIcon from "@mui/icons-material/People";
 import SchoolIcon from "@mui/icons-material/School";
 import FilterListIcon from "@mui/icons-material/FilterList";
-import { useNavigate } from "react-router-dom";
-import { AuthContext } from "../../context/AuthContext";
+import { useContext } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import Page from "../../components/Page";
 import api from "../../utils/axios";
+import { AuthContext } from "../../context/AuthContext";
+import { getAvatarSrc, getAvatarFallbackText } from "../../utils/avatarResolver";
+import useResponsive from "../../hooks/useResponsive";
 
+import logger from "../../utils/logger.js";
 function DirectorViewMentors() {
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
+  const isMobile = useResponsive("down", "sm");
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useContext(AuthContext);
+  const routePrefix =
+    user?.roleName === "hod" || location.pathname.startsWith("/hod")
+      ? "/hod"
+      : "/director";
   const [mentors, setMentors] = useState([]);
   const [page, setPage] = useState(0);
   const rowsPerPageOptions = [10, 20, 25];
   const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
   const { enqueueSnackbar } = useSnackbar();
   const [searchQuery, setSearchQuery] = useState("");
-  const [menteeCounts, setMenteeCounts] = useState({});
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
@@ -62,33 +71,67 @@ function DirectorViewMentors() {
 
   const getAllMentors = useCallback(async () => {
     try {
-      // Get all users
-      const response = await api.get("/users");
-      if (response.data.status === "success") {
-        const allUsers = response.data.data.users;
-        
-        // Filter all faculty members
-        const facultyMembers = allUsers.filter(u => u.roleName === "faculty");
-        
-        console.log("All Faculty Members:", facultyMembers);
-        setMentors(facultyMembers);
+      const [mentorsResponse, studentsResponse] = await Promise.all([
+        api.get("/mentors/mentors-with-mentees", {
+          params: {
+            page: 1,
+            limit: 500,
+          },
+        }),
+        api
+          .get("/mentorship/students")
+          .catch(() => ({ data: { data: [] } })),
+      ]);
 
-        // Fetch mentee counts for each mentor
-        const counts = {};
-        for (const mentor of facultyMembers) {
-          try {
-            const menteeResponse = await api.get(`/mentorship/${mentor._id}/mentees`);
-            counts[mentor._id] = menteeResponse.data.mentees?.length || 0;
-          } catch (error) {
-            counts[mentor._id] = 0;
+      if (mentorsResponse.data?.mentors) {
+        const mentorsList = mentorsResponse.data.mentors;
+        const studentsList = Array.isArray(studentsResponse.data?.data)
+          ? studentsResponse.data.data
+          : [];
+
+        const menteeNamesByMentorId = new Map();
+        studentsList.forEach((student) => {
+          const mentorId = student?.mentor?._id;
+          const studentName = student?.name;
+
+          if (!mentorId || !studentName) {
+            return;
           }
-        }
-        setMenteeCounts(counts);
+
+          const mentorKey = String(mentorId);
+          if (!menteeNamesByMentorId.has(mentorKey)) {
+            menteeNamesByMentorId.set(mentorKey, new Set());
+          }
+
+          menteeNamesByMentorId.get(mentorKey).add(studentName);
+        });
+
+        const enrichedMentors = mentorsList.map((mentor) => {
+          const mentorKey = String(mentor?._id || "");
+          const backendMenteeNames = Array.isArray(mentor?.menteeNames)
+            ? mentor.menteeNames
+            : [];
+          const fallbackMenteeNames = Array.from(
+            menteeNamesByMentorId.get(mentorKey) || []
+          );
+
+          const mergedMenteeNames = Array.from(
+            new Set([...backendMenteeNames, ...fallbackMenteeNames])
+          );
+
+          return {
+            ...mentor,
+            menteeNames: mergedMenteeNames,
+          };
+        });
+
+        setMentors(enrichedMentors);
+        logger.info("Fetched mentors with enriched student names:", enrichedMentors);
       } else {
-        throw new Error("Error fetching users");
+        throw new Error("Error fetching mentors");
       }
     } catch (error) {
-      console.log(error);
+      logger.info(error);
       enqueueSnackbar("Error fetching mentors", { variant: "error" });
     }
   }, [enqueueSnackbar]);
@@ -97,8 +140,12 @@ function DirectorViewMentors() {
     getAllMentors();
   }, [getAllMentors]);
 
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery, filterDepartment]);
+
   const handleViewMentees = (mentor) => {
-    navigate(`/director/mentor/${mentor._id}/mentees`);
+    navigate(`${routePrefix}/mentor/${mentor._id}/mentees`);
   };
 
   const clearFilters = () => {
@@ -107,8 +154,18 @@ function DirectorViewMentors() {
   };
 
   const filteredMentors = mentors.filter((mentor) => {
-    const matchesSearch = mentor.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         mentor.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+    const matchesMenteeName = (mentor.menteeNames || []).some((menteeName) =>
+      menteeName?.toLowerCase().includes(normalizedSearchQuery)
+    );
+
+    const matchesSearch =
+      !normalizedSearchQuery ||
+      mentor.name?.toLowerCase().includes(normalizedSearchQuery) ||
+      mentor.email?.toLowerCase().includes(normalizedSearchQuery) ||
+      mentor.department?.toLowerCase().includes(normalizedSearchQuery) ||
+      matchesMenteeName;
     const matchesDepartment = filterDepartment === "all" || mentor.department === filterDepartment;
     return matchesSearch && matchesDepartment;
   });
@@ -128,16 +185,18 @@ function DirectorViewMentors() {
             borderBottom: 1, 
             borderColor: 'divider',
             display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between',
-            alignItems: 'center',
-            px: 3,
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: { xs: 1, sm: 0 },
+            px: { xs: 2, sm: 3 },
             py: 2
           }}
         >
           <Typography variant="h6" component="h1" sx={{ fontWeight: 500 }}>
             All Faculty Mentors
           </Typography>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ justifyContent: { xs: 'flex-end', sm: 'flex-start' } }}>
             <Chip 
               icon={<SchoolIcon />}
               label={`${filteredMentors.length} Mentors`}
@@ -148,18 +207,25 @@ function DirectorViewMentors() {
               variant="outlined"
               onClick={() => setShowFilters(!showFilters)}
               startIcon={<FilterListIcon />}
-              size="small"
+              size={isMobile ? "small" : "medium"}
             >
               {showFilters ? "Hide Filters" : "Show Filters"}
             </Button>
           </Stack>
         </Box>
-        <CardContent>
+        <CardContent sx={{ px: { xs: 1.5, sm: 3 } }}>
           <Stack spacing={2}>
-            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <Box
+              sx={{
+                display: "flex",
+                gap: 2,
+                alignItems: "center",
+                flexDirection: { xs: "column", sm: "row" },
+              }}
+            >
               <TextField
                 fullWidth
-                placeholder="Search mentors..."
+                placeholder="Search mentors or students..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 InputProps={{
@@ -178,6 +244,7 @@ function DirectorViewMentors() {
                   variant="text"
                   onClick={clearFilters}
                   startIcon={<ClearIcon />}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
                 >
                   Clear
                 </Button>
@@ -190,12 +257,13 @@ function DirectorViewMentors() {
                 backgroundColor: isLight ? alpha(theme.palette.primary.main, 0.05) : alpha(theme.palette.info.main, 0.05),
                 borderRadius: 1
               }}>
-                <Stack direction="row" spacing={2}>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                   <Select
                     value={filterDepartment}
                     onChange={(e) => setFilterDepartment(e.target.value)}
-                    sx={{ minWidth: 200 }}
+                    sx={{ minWidth: { sm: 200 } }}
                     size="small"
+                    fullWidth={isMobile}
                   >
                     {uniqueDepartments.map((dept) => (
                       <MenuItem key={dept} value={dept}>
@@ -207,14 +275,14 @@ function DirectorViewMentors() {
               </Box>
             )}
 
-            <TableContainer component={Paper}>
-              <Table>
+            <TableContainer component={Paper} sx={{ overflowX: "auto" }}>
+              <Table sx={{ minWidth: { xs: 780, md: "100%" } }}>
                 <TableHead sx={{ backgroundColor: alpha(tableHeaderColor, 0.1) }}>
                   <TableRow>
                     <TableCell>Avatar</TableCell>
                     <TableCell>Name</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Phone</TableCell>
+                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Email</TableCell>
+                    <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>Phone</TableCell>
                     <TableCell>Department</TableCell>
                     <TableCell align="center">Mentees</TableCell>
                     <TableCell align="center">Actions</TableCell>
@@ -230,7 +298,10 @@ function DirectorViewMentors() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedMentors.map((mentor) => (
+                    paginatedMentors.map((mentor) => {
+                      const avatarSrc = getAvatarSrc(mentor);
+
+                      return (
                       <TableRow 
                         key={mentor._id}
                         hover
@@ -244,13 +315,15 @@ function DirectorViewMentors() {
                       >
                         <TableCell>
                           <Avatar 
+                            alt={mentor.name}
+                            src={avatarSrc || undefined}
                             sx={{ 
                               backgroundColor: isLight 
                                 ? theme.palette.primary.main 
                                 : theme.palette.info.main 
                             }}
                           >
-                            {mentor.name?.charAt(0).toUpperCase()}
+                            {!avatarSrc ? getAvatarFallbackText(mentor.name) : null}
                           </Avatar>
                         </TableCell>
                         <TableCell>
@@ -258,8 +331,8 @@ function DirectorViewMentors() {
                             {mentor.name}
                           </Typography>
                         </TableCell>
-                        <TableCell>{mentor.email}</TableCell>
-                        <TableCell>{mentor.phone || 'N/A'}</TableCell>
+                        <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{mentor.email}</TableCell>
+                        <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>{mentor.phone || 'N/A'}</TableCell>
                         <TableCell>
                           <Chip 
                             label={mentor.department || 'N/A'} 
@@ -274,31 +347,33 @@ function DirectorViewMentors() {
                         <TableCell align="center">
                           <Chip 
                             icon={<PeopleIcon />}
-                            label={menteeCounts[mentor._id] || 0}
+                            label={mentor.menteeCount || 0}
                             size="small"
-                            color={menteeCounts[mentor._id] > 0 ? "success" : "default"}
+                            color={mentor.menteeCount > 0 ? "success" : "default"}
                           />
                         </TableCell>
                         <TableCell align="center">
                           <Button
                             variant="contained"
-                            size="small"
+                            size={isMobile ? "small" : "medium"}
                             color={isLight ? "primary" : "info"}
                             onClick={() => handleViewMentees(mentor)}
-                            disabled={!menteeCounts[mentor._id] || menteeCounts[mentor._id] === 0}
+                            disabled={!mentor.menteeCount || mentor.menteeCount === 0}
+                            sx={{ whiteSpace: "nowrap" }}
                           >
                             View Mentees
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
 
             <TablePagination
-              rowsPerPageOptions={rowsPerPageOptions}
+              rowsPerPageOptions={isMobile ? [10, 20] : rowsPerPageOptions}
               component="div"
               count={filteredMentors.length}
               rowsPerPage={rowsPerPage}

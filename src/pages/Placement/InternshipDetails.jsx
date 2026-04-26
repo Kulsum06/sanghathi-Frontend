@@ -1,7 +1,17 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useCallback, useContext, useMemo, useState } from "react";
 import { useSnackbar } from "notistack";
-import { useForm, useFieldArray } from "react-hook-form";
-import { Box, Grid, Card, Stack, Button, IconButton, Typography, useTheme } from "@mui/material";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
+import {
+  Box,
+  Grid,
+  Card,
+  Stack,
+  Button,
+  IconButton,
+  Typography,
+  useTheme,
+  Chip,
+} from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { Delete as DeleteIcon } from "@mui/icons-material";
 import { FormProvider, RHFTextField } from "../../components/hook-form";
@@ -9,6 +19,8 @@ import api from "../../utils/axios";
 import { AuthContext } from "../../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import useApiCache from "../../hooks/useApiCache";
+import useDraftPersistence from "../../hooks/useDraftPersistence";
+import logger from "../../utils/logger.js";
 
 const DEFAULT_EMPTY_INTERNSHIP = {
   companyName: "",
@@ -28,20 +40,40 @@ export default function InternshipDetails() {
   const userId = menteeId || user?._id;
   const theme = useTheme();
   const isLight = theme.palette.mode === "light";
+  const [isDataFetched, setIsDataFetched] = useState(false);
 
-  const methods = useForm({ defaultValues: { internships: [{ ...DEFAULT_EMPTY_INTERNSHIP }] } });
+  const draftScopeId = useMemo(
+    () => menteeId || user?._id || "default",
+    [menteeId, user?._id]
+  );
+
+  const methods = useForm({ 
+    defaultValues: { internships: [{ ...DEFAULT_EMPTY_INTERNSHIP }] } 
+  });
+  
   const { handleSubmit, reset, formState: { isSubmitting, errors } } = methods;
   const { fields, append, remove } = useFieldArray({ control: methods.control, name: "internships" });
+  const watchedValues = useWatch({ control: methods.control });
 
   const { data, loading, error, invalidate } = useApiCache(
     userId ? `/internship/${userId}` : null
   );
 
-  useEffect(() => {
-    if (Object.keys(errors).length > 0) {
-      enqueueSnackbar("Please fill all required fields", { variant: "error" });
-    }
-  }, [errors, enqueueSnackbar]);
+  const { syncState, lastSavedAt } = useDraftPersistence({
+    formType: "placement-internship",
+    scopeId: draftScopeId,
+    values: watchedValues,
+    reset,
+    enableServerSync: Boolean(user?._id),
+    enablePersistence: isDataFetched,
+  });
+
+  const formatDateTime = (value) => {
+    if (!value) return "Not saved yet";
+    const asDate = new Date(value);
+    if (Number.isNaN(asDate.getTime())) return "Not saved yet";
+    return asDate.toLocaleString();
+  };
 
   useEffect(() => {
     if (data !== undefined) {
@@ -52,19 +84,32 @@ export default function InternshipDetails() {
           dateOfSelection: i.dateOfSelection ? new Date(i.dateOfSelection).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
           dateOfEnd: i.dateOfEnd ? new Date(i.dateOfEnd).toISOString().split("T")[0] : "",
         }));
-        reset({ internships: formatted });
+        
+        // Check if there is a local draft before resetting to server data
+        const existingLocalDraft = localStorage.getItem(
+          `sanghathi:draft:placement-internship:${draftScopeId}`
+        );
+        if (!existingLocalDraft) {
+          reset({ internships: formatted });
+        }
       } else {
-        reset({ internships: [{ ...DEFAULT_EMPTY_INTERNSHIP }] });
+        const existingLocalDraft = localStorage.getItem(
+          `sanghathi:draft:placement-internship:${draftScopeId}`
+        );
+        if (!existingLocalDraft) {
+          reset({ internships: [{ ...DEFAULT_EMPTY_INTERNSHIP }] });
+        }
       }
+      setIsDataFetched(true);
     }
-  }, [data, reset]);
+  }, [data, reset, draftScopeId]);
 
   useEffect(() => {
     if (error) {
       enqueueSnackbar("Failed to fetch internship data", { variant: "error" });
-      reset({ internships: [{ ...DEFAULT_EMPTY_INTERNSHIP }] });
+      setIsDataFetched(true);
     }
-  }, [error, enqueueSnackbar, reset]);
+  }, [error, enqueueSnackbar]);
 
   const validateInternships = (formData) => {
     const isValid = formData.internships.every(
@@ -78,19 +123,35 @@ export default function InternshipDetails() {
     try {
       if (!user?._id) { enqueueSnackbar("User information not available", { variant: "error" }); return; }
       if (!validateInternships(formData)) return;
+      
+      logger.info("Saving internship details for user:", userId);
       await api.post("/internship", { internships: formData.internships, userId: menteeId || user._id });
+      
       enqueueSnackbar("Internship details saved successfully!", { variant: "success" });
       invalidate();
     } catch (err) {
+      logger.error("Error saving internship details:", err);
       enqueueSnackbar(err.message || "An error occurred while processing the request", { variant: "error" });
     }
   };
 
   return (
-    <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+    <FormProvider
+      methods={methods}
+      onSubmit={handleSubmit(onSubmit)}
+      disableAutoDraft
+    >
       <Card sx={{ p: 3 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
+          <Chip size="small" variant="outlined" label={`Draft: ${syncState}`} />
+          <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
+            Last saved: {formatDateTime(lastSavedAt)}
+          </Typography>
+        </Stack>
+
         <Typography variant="h6" gutterBottom>Internship Details</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Fields marked with * are required</Typography>
+        
         <Grid container spacing={2}>
           {fields.map((item, index) => (
             <React.Fragment key={item.id}>
@@ -101,30 +162,80 @@ export default function InternshipDetails() {
                       <Typography variant="subtitle1" gutterBottom>Internship - {index + 1}</Typography>
                     </Grid>
                     <Grid item xs={1} sx={{ textAlign: "right" }}>
-                      {fields.length > 1 && <IconButton color="error" onClick={() => remove(index)}><DeleteIcon /></IconButton>}
+                      {fields.length > 1 && (
+                        <IconButton color="error" onClick={() => remove(index)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
                     </Grid>
-                    <Grid item xs={12} md={6}><RHFTextField name={`internships[${index}].companyName`} label="Company Name" fullWidth required /></Grid>
-                    <Grid item xs={12} md={6}><RHFTextField name={`internships[${index}].location`} label="Location" fullWidth required /></Grid>
-                    <Grid item xs={12} md={6}><RHFTextField name={`internships[${index}].dateOfSelection`} label="Start Date" type="date" fullWidth InputLabelProps={{ shrink: true }} required /></Grid>
-                    <Grid item xs={12} md={6}><RHFTextField name={`internships[${index}].dateOfEnd`} label="End Date" type="date" fullWidth InputLabelProps={{ shrink: true }} required /></Grid>
-                    <Grid item xs={12} md={6}><RHFTextField name={`internships[${index}].stipend`} label="Stipend" fullWidth required /></Grid>
-                    <Grid item xs={12} md={6}><RHFTextField name={`internships[${index}].semester`} label="Semester" fullWidth required /></Grid>
-                    <Grid item xs={12}><RHFTextField name={`internships[${index}].description`} label="Description" multiline rows={3} fullWidth /></Grid>
+                    <Grid item xs={12} md={6}>
+                      <RHFTextField name={`internships[${index}].companyName`} label="Company Name" fullWidth required />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <RHFTextField name={`internships[${index}].location`} label="Location" fullWidth required />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <RHFTextField 
+                        name={`internships[${index}].dateOfSelection`} 
+                        label="Start Date" 
+                        type="date" 
+                        fullWidth 
+                        InputLabelProps={{ shrink: true }} 
+                        required 
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <RHFTextField 
+                        name={`internships[${index}].dateOfEnd`} 
+                        label="End Date" 
+                        type="date" 
+                        fullWidth 
+                        InputLabelProps={{ shrink: true }} 
+                        required 
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <RHFTextField name={`internships[${index}].stipend`} label="Stipend" fullWidth required />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <RHFTextField name={`internships[${index}].semester`} label="Semester" fullWidth required />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <RHFTextField name={`internships[${index}].description`} label="Description" multiline rows={3} fullWidth />
+                    </Grid>
                   </Grid>
                 </Card>
               </Grid>
             </React.Fragment>
           ))}
           <Grid item xs={12}>
-            <Button variant="contained" color={isLight ? "primary" : "info"} onClick={() => append({ ...DEFAULT_EMPTY_INTERNSHIP })} sx={{ mt: 2, display: "block", mx: "auto" }}>
+            <Button 
+              variant="contained" 
+              color={isLight ? "primary" : "info"} 
+              onClick={() => append({ ...DEFAULT_EMPTY_INTERNSHIP })} 
+              sx={{ mt: 2, display: "block", mx: "auto" }}
+            >
               Add Internship
             </Button>
           </Grid>
           <Grid item xs={12}>
             <Stack spacing={3} alignItems="flex-end" sx={{ mt: 3 }}>
               <Box display="flex" gap={1}>
-                <LoadingButton variant="outlined" color={isLight ? "primary" : "info"} onClick={() => reset({ internships: [{ ...DEFAULT_EMPTY_INTERNSHIP }] })}>Reset</LoadingButton>
-                <LoadingButton type="submit" variant="contained" color={isLight ? "primary" : "info"} loading={isSubmitting || loading}>Save</LoadingButton>
+                <LoadingButton 
+                  variant="outlined" 
+                  color={isLight ? "primary" : "info"} 
+                  onClick={() => reset({ internships: [{ ...DEFAULT_EMPTY_INTERNSHIP }] })}
+                >
+                  Reset
+                </LoadingButton>
+                <LoadingButton 
+                  type="submit" 
+                  variant="contained" 
+                  color={isLight ? "primary" : "info"} 
+                  loading={isSubmitting || loading}
+                >
+                  Save
+                </LoadingButton>
               </Box>
             </Stack>
           </Grid>

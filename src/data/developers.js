@@ -1,0 +1,75 @@
+export const developers = {
+  kethanvr: {
+    id: "kethanvr",
+    name: "Kethan VR",
+    role: "Full-StackEngineer",
+    group: "others",
+    github: "https://github.com/Kethanvr",
+    email: "kethan.ise24@cmrit.ac.in",
+    shortBio:
+      "Architects, deploys, and scales production-grade full-stack AI systems end-to-end.",
+  },
+  "shovan-mondal": {
+    id: "shovan-mondal",
+    name: "shovan-mondal",
+    role: "Founder",
+    group: "founders",
+    github: "https://github.com/shovan-mondal",
+    email: "shmo23ise@cmrit.ac.in",
+    shortBio: "Core founding contributor of Sanghathi.",
+  },
+  monu564100: {
+    id: "monu564100",
+    name: "monu564100",
+    role: "CoFounder",
+    group: "founders",
+    github: "https://github.com/monu564100",
+    email: "moku23ise@cmrit.ac.in",
+    shortBio: "Core founding contributor of Sanghathi.",
+  },
+  "SUJAY-HK": {
+    id: "SUJAY-HK",
+    name: "SUJAY-HK",
+    role: "Developer",
+    group: "others",
+    github: "https://github.com/SUJAY-HK",
+    shortBio: "Developer profile details will be updated soon.",
+  },
+  Kulsum06: {
+    id: "Kulsum06",
+    name: "Kulsum06",
+    role: "Developer",
+    group: "others",
+    github: "https://github.com/Kulsum06",
+    shortBio: "Developer profile details will be updated soon.",
+  },
+  "Sai-Emani25": {
+    id: "Sai-Emani25",
+    name: "Sai-Emani25",
+    role: "Developer",
+    group: "others",
+    github: "https://github.com/Sai-Emani25",
+    shortBio: "Developer profile details will be updated soon.",
+  },
+  vsuryacharan: {
+    id: "vsuryacharan",
+    name: "vsuryacharan",
+    role: "Developer",
+    group: "others",
+    github: "https://github.com/vsuryacharan",
+    shortBio: "Developer profile details will be updated soon.",
+  },
+  advitha24: {
+    id: "advitha24",
+    name: "advitha24",
+    role: "Developer",
+    group: "others",
+    github: "https://github.com/advitha24",
+    shortBio: "Developer profile details will be updated soon.",
+  },
+};
+
+export const developerGroups = {
+  founders: ["shovan-mondal", "monu564100"],
+  others: ["SUJAY-HK", "Kulsum06", "Sai-Emani25", "vsuryacharan", "advitha24", "kethanvr"],
+};

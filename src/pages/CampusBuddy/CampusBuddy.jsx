@@ -1,126 +1,82 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import {
+  Alert,
+  Avatar,
   Box,
-  Stack,
+  Button,
+  Card,
+  Chip,
+  Container,
   Paper,
+  Stack,
   TextField,
   Typography,
-  IconButton,
-  Card,
-  Container,
-  Avatar,
-  keyframes,
   useTheme,
 } from "@mui/material";
-import SendIcon from "@mui/icons-material/Send";
-import { deepOrange } from "@mui/material/colors";
 import AssistantIcon from "@mui/icons-material/Assistant";
+import ConstructionRoundedIcon from "@mui/icons-material/ConstructionRounded";
+import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
 import PersonIcon from "@mui/icons-material/Person";
-import api from "../../utils/axios";
+import SendIcon from "@mui/icons-material/Send";
+import { alpha } from "@mui/material/styles";
 import { useSnackbar } from "notistack";
-const bounce = keyframes`
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-`;
-const ThinkingAnimation = ({ size = 40 }) => {
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        width: size,
-        height: size,
-        position: "relative",
-      }}
-    >
-      <Box
-        sx={{
-          width: size / 2,
-          height: size / 2,
-          bgcolor: "primary.main",
-          borderRadius: "50%",
-          position: "absolute",
-          top: 0,
-          left: 0,
-          animation: `${bounce} 1s ease-in-out infinite`,
-          animationDelay: "-0.5s",
-        }}
-      />
-      <Box
-        sx={{
-          width: size / 2,
-          height: size / 2,
-          bgcolor: "secondary.main",
-          borderRadius: "50%",
-          position: "absolute",
-          top: 0,
-          right: 0,
-          animation: `${bounce} 1s ease-in-out infinite`,
-        }}
-      />
-    </Box>
-  );
+import api from "../../utils/axios";
+import logger from "../../utils/logger.js";
+
+const INITIAL_MESSAGES = [
+  {
+    id: "welcome",
+    body: "Hey, I'm your Campus Buddy. How can I help you today?",
+    sender: "ai",
+  },
+];
+
+const quickOptions = [
+  "Department Location",
+  "IAT dates",
+  "VTU Examinations",
+  "Department HOD",
+  "Other question",
+];
+
+const quickOptionPrompts = {
+  "Department Location": "For CMRIT, where is the department located on campus?",
+  "IAT dates": "What is the latest schedule information for the IAT exams?",
+  "VTU Examinations": "What is the latest information available for VTU examinations?",
+  "Department HOD": "Who is the HOD of this department? Include name and designation if available.",
+  "Other question": "Please ask your question and I will try to help you.",
 };
 
-const useTypewriter = (text, speed = 20) => {
-  const [displayText, setDisplayText] = useState("");
-  const [index, setIndex] = useState(0);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (index === text.length) {
-        clearTimeout(timeoutId);
-        return;
-      }
-
-      setDisplayText((prevText) => prevText + text.charAt(index));
-      setIndex((prevIndex) => prevIndex + 1);
-    }, speed);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [text, speed, index]);
-
-  return displayText;
-};
 const CampusBuddyHeader = () => {
   const theme = useTheme();
-  const isLight = theme.palette.mode === 'light';
-  const colorMode = isLight ? 'primary' : 'info';
+  const isLight = theme.palette.mode === "light";
+  const colorMode = isLight ? "primary" : "info";
 
   return (
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
-        mt: 2,
-        mb: 1,
-        ml: 5,
-        height: "5vh",
-        width: "100%",
+        gap: 1.5,
+        px: { xs: 2, sm: 3 },
+        pt: { xs: 1.5, sm: 2 },
+        pb: 1.5,
       }}
     >
       <Avatar
-        sx={{ 
-          bgcolor: isLight ? theme.palette.primary.main : theme.palette.info.main, 
-          mr: 2 
+        sx={{
+          bgcolor: theme.palette[colorMode].main,
+          width: { xs: 40, sm: 48 },
+          height: { xs: 40, sm: 48 },
         }}
-        variant="rounded"
-        size="large"
       >
-        <AssistantIcon fontSize="large" />
+        <AssistantIcon />
       </Avatar>
       <Box>
-        <Typography variant="h6" sx={{ mb: 0 }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
           Campus Buddy
         </Typography>
-        <Typography variant="subtitle1" sx={{ mb: 0 }}>
+        <Typography variant="body2" color="text.secondary">
           Your Personal AI Assistant
         </Typography>
       </Box>
@@ -128,194 +84,320 @@ const CampusBuddyHeader = () => {
   );
 };
 
-const MOCK_MESSAGE = [
-  {
-    body: "Hey, I'm your Campus Buddy. How can I help you today?",
-    sender: "ai",
-  },
-];
-
 const CampusBuddy = () => {
-  const [messages, setMessages] = useState(MOCK_MESSAGE);
+  const theme = useTheme();
+  const { enqueueSnackbar } = useSnackbar();
+  const isLight = theme.palette.mode === "light";
+  const accentColor = isLight ? theme.palette.primary.main : theme.palette.info.main;
+
+  const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [messageInput, setMessageInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { enqueueSnackbar } = useSnackbar();
 
-  const handleMessageInput = (e) => {
-    setMessageInput(e.target.value);
-  };
+  const surfaceStyles = useMemo(
+    () => ({
+      card: {
+        backgroundColor: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.divider}`,
+        boxShadow: isLight ? "0 12px 30px rgba(15, 23, 42, 0.06)" : "0 12px 30px rgba(0, 0, 0, 0.25)",
+      },
+      chatArea: {
+        backgroundColor: isLight ? theme.palette.background.default : theme.palette.background.paper,
+      },
+      userBubble: {
+        backgroundColor: accentColor,
+        color: theme.palette.common.white,
+      },
+      botBubble: {
+        backgroundColor: isLight ? theme.palette.grey[100] : theme.palette.grey[800],
+        color: theme.palette.text.primary,
+        border: `1px solid ${theme.palette.divider}`,
+      },
+      input: {
+        backgroundColor: theme.palette.background.paper,
+      },
+    }),
+    [accentColor, isLight, theme.palette.background.default, theme.palette.background.paper, theme.palette.common.white, theme.palette.divider, theme.palette.grey, theme.palette.text.primary]
+  );
 
-  // api for communicating with campusBuddy (chatbot)
-  const handleSendMessage = async () => {
-    console.log(messageInput);
+  const sendMessage = async (text = messageInput) => {
+    const query = text.trim();
+    if (!query || isLoading) {
+      return;
+    }
+
+    const userMessage = {
+      id: `${Date.now()}-user`,
+      body: query,
+      sender: "user",
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
     setMessageInput("");
-    if (messageInput.trim().length > 0) {
-      setMessages([...messages, { body: messageInput, sender: "user" }]);
-      setIsLoading(true);
-      try {
-        const response = await api.post("campus-buddy/query", {
-          query: messageInput,
-        });
-        const { data } = response.data;
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { body: data.output, sender: "ai" },
-        ]);
-      } catch (error) {
-        console.error("Error communicating with Campus Buddy:", error);
-        enqueueSnackbar(
-          "Error communicating with Campus Buddy. Please try again.",
-          { variant: "error" }
-        );
-      }
+    setIsLoading(true);
+
+    try {
+      const response = await api.post("campus-buddy/query", { query });
+      const output = response?.data?.data?.output || "I couldn't fetch a response right now.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-ai`,
+          body: output,
+          sender: "ai",
+        },
+      ]);
+    } catch (error) {
+      logger.error("Error communicating with Campus Buddy:", error);
+      enqueueSnackbar("Error communicating with Campus Buddy. Please try again.", {
+        variant: "error",
+      });
+    } finally {
       setIsLoading(false);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter") {
-      handleSendMessage();
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
     }
   };
 
+  const handleQuickOption = (option) => {
+    const prompt = quickOptionPrompts[option] || option;
+    setMessageInput(prompt);
+  };
+
   return (
-    <Box sx={{ flexGrow: 1 }}>
+    <Box sx={{ flexGrow: 1, minHeight: "100vh" }}>
       <CampusBuddyHeader />
-      <Container maxWidth="xl" sx={{ overflowX: "hidden", overflowY: "auto" }}>
-        <Card sx={{ height: "80vh", display: "flex", flexShrink: 0, m: 2 }}>
+
+      <Container maxWidth="lg" sx={{ pb: 2 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.5,
+            px: { xs: 1.5, sm: 2 },
+            py: { xs: 1.2, sm: 1.5 },
+            borderRadius: 2,
+            border: `1px solid ${alpha(accentColor, 0.35)}`,
+            background: isLight
+              ? `linear-gradient(120deg, ${alpha(accentColor, 0.08)} 0%, ${alpha(theme.palette.success.main, 0.08)} 100%)`
+              : `linear-gradient(120deg, ${alpha(accentColor, 0.16)} 0%, ${alpha(theme.palette.success.main, 0.12)} 100%)`,
+          }}
+        >
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.2}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            justifyContent="space-between"
+          >
+            <Box>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.7,
+                }}
+              >
+                <ConstructionRoundedIcon sx={{ fontSize: 18, color: accentColor }} />
+                Campus Buddy is under active development
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                More features are being rolled out soon. Current build supports quick department, exam, and FAQ assistance.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+              <Chip
+                size="small"
+                icon={<RocketLaunchRoundedIcon />}
+                label="Upcoming: smarter context"
+                sx={{ borderColor: alpha(accentColor, 0.4) }}
+                variant="outlined"
+              />
+              <Chip
+                size="small"
+                label="Feature preview"
+                color={isLight ? "primary" : "info"}
+                variant="filled"
+              />
+            </Stack>
+          </Stack>
+        </Paper>
+
+        <Alert
+          severity="info"
+          sx={{
+            mb: 1.5,
+            borderRadius: 2,
+            border: `1px solid ${alpha(accentColor, 0.3)}`,
+            bgcolor: alpha(accentColor, isLight ? 0.08 : 0.16),
+          }}
+        >
+          Responses may be refined as new data and features are integrated.
+        </Alert>
+
+        <Card
+          sx={{
+            ...surfaceStyles.card,
+            borderRadius: 3,
+            overflow: "hidden",
+          }}
+        >
           <Box
             sx={{
+              ...surfaceStyles.chatArea,
               display: "flex",
               flexDirection: "column",
-              height: "100%",
-              width: "100%",
+              minHeight: { xs: "calc(100vh - 250px)", md: "72vh" },
             }}
           >
             <Box
               sx={{
                 flexGrow: 1,
+                px: { xs: 2, sm: 3 },
+                py: { xs: 2, sm: 3 },
                 overflowY: "auto",
-                display: "flex",
-                p: 5,
-                flexDirection: "column",
               }}
             >
-              {messages.map((message, index) => (
-                <ChatMessage key={index} message={message} />
-              ))}
-              {isLoading && <ThinkingAnimation size={24} />}
+              <Stack spacing={1.6}>
+                {messages.map((message) => {
+                  const isUser = message.sender === "user";
+
+                  return (
+                    <Box
+                      key={message.id}
+                      sx={{
+                        display: "flex",
+                        justifyContent: isUser ? "flex-end" : "flex-start",
+                        gap: 1,
+                      }}
+                    >
+                      {!isUser && (
+                        <Avatar sx={{ bgcolor: accentColor, width: 34, height: 34 }}>
+                          <AssistantIcon sx={{ fontSize: 18 }} />
+                        </Avatar>
+                      )}
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          ...(isUser ? surfaceStyles.userBubble : surfaceStyles.botBubble),
+                          px: 2,
+                          py: 1.5,
+                          borderRadius: 3,
+                          maxWidth: { xs: "85%", sm: "70%" },
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
+                          {message.body}
+                        </Typography>
+                      </Paper>
+                      {isUser && (
+                        <Avatar sx={{ bgcolor: accentColor, width: 34, height: 34 }}>
+                          <PersonIcon sx={{ fontSize: 18 }} />
+                        </Avatar>
+                      )}
+                    </Box>
+                  );
+                })}
+
+                {isLoading && (
+                  <Box sx={{ display: "flex", justifyContent: "flex-start", gap: 1 }}>
+                    <Avatar sx={{ bgcolor: accentColor, width: 34, height: 34 }}>
+                      <AssistantIcon sx={{ fontSize: 18 }} />
+                    </Avatar>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        ...surfaceStyles.botBubble,
+                        px: 2,
+                        py: 1.5,
+                        borderRadius: 3,
+                      }}
+                    >
+                      <Typography variant="body2">Thinking...</Typography>
+                    </Paper>
+                  </Box>
+                )}
+              </Stack>
             </Box>
-            <Box sx={{ p: 3 }}>
-              <ChatMessageInput
-                messageInput={messageInput}
-                setMessageInput={setMessageInput}
-                handleSendMessage={handleSendMessage}
-                handleKeyPress={handleKeyPress}
-                isLoading={isLoading}
-              />
+
+            <Box
+              sx={{
+                px: { xs: 1.5, sm: 2 },
+                py: 2,
+                borderTop: `1px solid ${theme.palette.divider}`,
+                ...surfaceStyles.input,
+              }}
+            >
+              <Stack spacing={1.2}>
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                  {quickOptions.map((option) => (
+                    <Button
+                      key={option}
+                      variant="outlined"
+                      size="small"
+                      onClick={() => handleQuickOption(option)}
+                      sx={{
+                        borderRadius: 999,
+                        textTransform: "none",
+                        borderColor: alpha(accentColor, 0.35),
+                        color: isLight ? theme.palette.text.primary : theme.palette.info.light,
+                        bgcolor: isLight ? theme.palette.common.white : "rgba(20, 34, 58, 0.28)",
+                        '&:hover': {
+                          borderColor: accentColor,
+                          bgcolor: alpha(accentColor, isLight ? 0.08 : 0.18),
+                        },
+                      }}
+                    >
+                      {option}
+                    </Button>
+                  ))}
+                </Stack>
+
+                <Stack direction="row" spacing={1} alignItems="flex-end">
+                  <TextField
+                    fullWidth
+                    value={messageInput}
+                    onChange={(event) => setMessageInput(event.target.value)}
+                    onKeyDown={handleKeyDown}
+                    variant="outlined"
+                    size="small"
+                    multiline
+                    minRows={1}
+                    maxRows={4}
+                    placeholder={isLoading ? "Thinking..." : "Type your message..."}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        backgroundColor: theme.palette.background.paper,
+                      },
+                    }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={() => sendMessage()}
+                    disabled={!messageInput.trim() || isLoading}
+                    sx={{
+                      minWidth: 48,
+                      height: 40,
+                      borderRadius: 2,
+                    }}
+                  >
+                    <SendIcon fontSize="small" />
+                  </Button>
+                </Stack>
+              </Stack>
             </Box>
           </Box>
         </Card>
       </Container>
     </Box>
-  );
-};
-
-const ChatMessage = ({ message }) => {
-  const theme = useTheme();
-  const isLight = theme.palette.mode === 'light';
-  const colorMode = isLight ? 'primary' : 'info';
-  const isUserMessage = message.sender === "user";
-  const justifyContent = isUserMessage ? "flex-end" : "flex-start";
-  const typingSpeed = 5;
-  const typewriterText = useTypewriter(
-    message.sender === "ai" ? message.body : "",
-    typingSpeed
-  );
-
-  return (
-    <Box
-      sx={{
-        mb: 2,
-        display: "flex",
-        justifyContent: justifyContent,
-      }}
-    >
-      <Paper
-        sx={{
-          p: 2,
-          bgcolor: isUserMessage 
-            ? isLight ? theme.palette.primary.main : theme.palette.info.main
-            : "grey.200",
-          color: isUserMessage ? "common.white" : "common.black",
-          borderRadius: "10px",
-          maxWidth: "fit-content",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        {isUserMessage ? (
-          <Avatar sx={{ mr: 1 }}>
-            <PersonIcon />
-          </Avatar>
-        ) : (
-          <Avatar 
-            sx={{ mr: 1 }} 
-            style={{ 
-              backgroundColor: isLight ? theme.palette.primary.main : theme.palette.info.main
-            }}
-          >
-            <AssistantIcon />
-          </Avatar>
-        )}
-        <Typography>
-          {message.sender === "ai" ? typewriterText : message.body}
-        </Typography>
-      </Paper>
-    </Box>
-  );
-};
-const ChatMessageInput = ({
-  handleSendMessage,
-  handleKeyPress,
-  messageInput,
-  setMessageInput,
-  isLoading,
-}) => {
-  const [isDisabled, setIsDisabled] = useState(true);
-
-  const handleInput = (e) => {
-    const { value } = e.target;
-    setMessageInput(value);
-    if (value.trim().length > 0) {
-      setIsDisabled(false);
-    } else {
-      setIsDisabled(true);
-    }
-  };
-
-  return (
-    <Stack direction="row" spacing={1} alignItems="flex-end">
-      <TextField
-        fullWidth
-        value={messageInput}
-        onChange={handleInput}
-        onKeyPress={handleKeyPress}
-        variant="outlined"
-        placeholder={isLoading ? "Thinking..." : "Type a message"}
-        InputProps={{
-          endAdornment: (
-            <IconButton
-              color="primary"
-              disabled={isDisabled}
-              onClick={handleSendMessage}
-            >
-              <SendIcon />
-            </IconButton>
-          ),
-        }}
-      />
-    </Stack>
   );
 };
 

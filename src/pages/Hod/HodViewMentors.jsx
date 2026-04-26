@@ -31,10 +31,14 @@ import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
 import Page from "../../components/Page";
 import api from "../../utils/axios";
+import { getAvatarSrc, getAvatarFallbackText } from "../../utils/avatarResolver";
+import useResponsive from "../../hooks/useResponsive";
 
+import logger from "../../utils/logger.js";
 function HodViewMentors() {
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
+  const isMobile = useResponsive("down", "sm");
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const [mentors, setMentors] = useState([]);
@@ -59,89 +63,42 @@ function HodViewMentors() {
   const getAssignedMentors = useCallback(async () => {
     try {
       setLoading(true);
-      console.log("=== Fetching Mentors for HOD ===");
-      console.log("HOD Department:", user?.department);
-      
-      // Fetch all students with their mentor assignments (same as Admin)
-      const response = await api.get("/mentors/allocation-students");
-      const studentsData = response.data?.data || [];
-      
-      console.log(`Fetched ${studentsData.length} total students`);
-      
-      // Filter students by HOD's department and group by mentor
-      const mentorMap = new Map();
-      
-      studentsData.forEach((student) => {
-        // Only process students from HOD's department who have mentors
-        if (student.department === user?.department && student.mentor) {
-          const mentorId = student.mentor._id;
-          const mentorName = student.mentor.name;
-          
-          if (!mentorMap.has(mentorId)) {
-            mentorMap.set(mentorId, {
-              _id: mentorId,
-              name: mentorName,
-              students: []
-            });
-          }
-          
-          mentorMap.get(mentorId).students.push(student);
-        }
+      logger.info("=== Fetching Mentors for HOD ===");
+      logger.info("HOD Department:", user?.department);
+
+      const response = await api.get("/mentors/mentors-with-mentees", {
+        params: {
+          department: user?.department,
+          page: 1,
+          limit: 500,
+        },
       });
-      
-      console.log(`Found ${mentorMap.size} mentors in ${user?.department} department`);
-      
-      if (mentorMap.size === 0) {
-        setMentors([]);
-        enqueueSnackbar("No mentors found with assigned students in your department", { variant: "info" });
-        setLoading(false);
-        return;
-      }
-      
-      // Fetch all faculty to get complete mentor information
-      const facultyResponse = await api.get("/users?role=faculty");
-      const allFaculty = facultyResponse.data?.data?.users || [];
-      
-      console.log(`Fetched ${allFaculty.length} faculty members`);
-      
-      // Build mentor list with full details
-      const mentorsList = Array.from(mentorMap.values()).map(mentorData => {
-        const facultyInfo = allFaculty.find(f => f._id === mentorData._id);
-        
-        return {
-          _id: mentorData._id,
-          name: mentorData.name,
-          email: facultyInfo?.email || 'N/A',
-          phone: facultyInfo?.phone || 'N/A',
-          department: facultyInfo?.department || user?.department,
-          roleName: 'faculty',
-          menteeCount: mentorData.students.length
-        };
-      });
-      
-      // Sort by mentee count
-      mentorsList.sort((a, b) => b.menteeCount - a.menteeCount);
-      
-      console.log(`Setting ${mentorsList.length} mentors:`, mentorsList);
+
+      const mentorsList = response.data?.mentors || [];
+
+      logger.info(`Fetched ${mentorsList.length} mentors for ${user?.department}`);
       setMentors(mentorsList);
-      
-      enqueueSnackbar(`Found ${mentorsList.length} assigned mentors`, { variant: "success" });
-      
+
+      if (!mentorsList.length) {
+        enqueueSnackbar("No mentors found with assigned students in your department", {
+          variant: "info",
+        });
+      }
     } catch (error) {
-      console.error("Error fetching mentors:", error);
+      logger.error("Error fetching mentors:", error);
       enqueueSnackbar("Failed to fetch mentors", { variant: "error" });
       setMentors([]);
     } finally {
       setLoading(false);
     }
-  }, [user, enqueueSnackbar]);
+  }, [user?.department, enqueueSnackbar]);
 
   useEffect(() => {
     if (user && user.department) {
-      console.log("useEffect triggered - fetching mentors");
+      logger.info("useEffect triggered - fetching mentors");
       getAssignedMentors();
     } else {
-      console.log("User or department not available:", { user: user?.name, dept: user?.department });
+      logger.info("User or department not available:", { user: user?.name, dept: user?.department });
     }
   }, [getAssignedMentors, user]);
 
@@ -169,9 +126,11 @@ function HodViewMentors() {
             borderBottom: 1, 
             borderColor: 'divider',
             display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between',
-            alignItems: 'center',
-            px: 3,
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: { xs: 1, sm: 0 },
+            px: { xs: 2, sm: 3 },
             py: 2
           }}
         >
@@ -185,9 +144,16 @@ function HodViewMentors() {
             variant="outlined"
           />
         </Box>
-        <CardContent>
+        <CardContent sx={{ px: { xs: 1.5, sm: 3 } }}>
           <Stack spacing={2}>
-            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <Box
+              sx={{
+                display: "flex",
+                gap: 2,
+                alignItems: "center",
+                flexDirection: { xs: "column", sm: "row" },
+              }}
+            >
               <TextField
                 fullWidth
                 placeholder="Search assigned mentors..."
@@ -206,14 +172,14 @@ function HodViewMentors() {
               />
             </Box>
 
-            <TableContainer component={Paper}>
-              <Table>
+            <TableContainer component={Paper} sx={{ overflowX: "auto" }}>
+              <Table sx={{ minWidth: { xs: 780, md: "100%" } }}>
                 <TableHead sx={{ backgroundColor: alpha(tableHeaderColor, 0.1) }}>
                   <TableRow>
                     <TableCell>Avatar</TableCell>
                     <TableCell>Mentor Name</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Phone</TableCell>
+                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Email</TableCell>
+                    <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>Phone</TableCell>
                     <TableCell>Department</TableCell>
                     <TableCell align="center">Assigned Mentees</TableCell>
                     <TableCell align="center">Actions</TableCell>
@@ -237,7 +203,10 @@ function HodViewMentors() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedMentors.map((mentor) => (
+                    paginatedMentors.map((mentor) => {
+                      const avatarSrc = getAvatarSrc(mentor);
+
+                      return (
                       <TableRow 
                         key={mentor._id}
                         hover
@@ -251,13 +220,15 @@ function HodViewMentors() {
                       >
                         <TableCell>
                           <Avatar 
+                            alt={mentor.name}
+                            src={avatarSrc || undefined}
                             sx={{ 
                               backgroundColor: isLight 
                                 ? theme.palette.primary.main 
                                 : theme.palette.info.main 
                             }}
                           >
-                            {mentor.name?.charAt(0).toUpperCase()}
+                            {!avatarSrc ? getAvatarFallbackText(mentor.name) : null}
                           </Avatar>
                         </TableCell>
                         <TableCell>
@@ -265,8 +236,8 @@ function HodViewMentors() {
                             {mentor.name}
                           </Typography>
                         </TableCell>
-                        <TableCell>{mentor.email}</TableCell>
-                        <TableCell>{mentor.phone || 'N/A'}</TableCell>
+                        <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{mentor.email}</TableCell>
+                        <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>{mentor.phone || 'N/A'}</TableCell>
                         <TableCell>
                           <Chip 
                             label={mentor.department} 
@@ -289,23 +260,25 @@ function HodViewMentors() {
                         <TableCell align="center">
                           <Button
                             variant="contained"
-                            size="small"
+                            size={isMobile ? "small" : "medium"}
                             color={isLight ? "primary" : "info"}
                             onClick={() => handleViewMentorDashboard(mentor)}
-                            startIcon={<DashboardIcon />}
+                            startIcon={!isMobile ? <DashboardIcon /> : null}
+                            sx={{ whiteSpace: "nowrap" }}
                           >
                             View Dashboard
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
 
             <TablePagination
-              rowsPerPageOptions={rowsPerPageOptions}
+              rowsPerPageOptions={isMobile ? [10, 20] : rowsPerPageOptions}
               component="div"
               count={filteredMentors.length}
               rowsPerPage={rowsPerPage}

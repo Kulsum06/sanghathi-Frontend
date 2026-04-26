@@ -10,7 +10,7 @@ const SettingsContext = createContext({
 // };
 
 function SettingsProvider({ children }) {
-  const [themeMode, setThemeMode] = useState("dark");
+  const [themeMode, setThemeMode] = useState("light");
   const onToggleMode = useMemo(
     () => ({
       toggleThemeMode: () =>

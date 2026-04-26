@@ -11,8 +11,12 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import PersonIcon from "@mui/icons-material/Person";
+import useResponsive from "../../hooks/useResponsive";
 
+import logger from "../../utils/logger.js";
 const StudentTable = ({ students, selectedStudents, onSelectStudent, theme, isLight }) => {
+  const isMobile = useResponsive("down", "sm");
+
   // Helper function to safely get profile data
   const getProfileData = (student, field) => {
     // Check all possible paths where the data might be
@@ -55,7 +59,7 @@ const StudentTable = ({ students, selectedStudents, onSelectStudent, theme, isLi
       return student.mentor.mentorDetails.name;
     }
     
-    console.log("Mentor data for debugging:", student.mentor);
+    logger.info("Mentor data for debugging:", student.mentor);
     return null;
   };
   
@@ -68,7 +72,7 @@ const StudentTable = ({ students, selectedStudents, onSelectStudent, theme, isLi
   };
 
   return (
-    <Table>
+    <Table sx={{ minWidth: { xs: 680, md: "100%" } }}>
       <TableHead>
         <TableRow>
           <TableCell padding="checkbox">
@@ -80,8 +84,8 @@ const StudentTable = ({ students, selectedStudents, onSelectStudent, theme, isLi
           </TableCell>
           <TableCell>Name</TableCell>
           <TableCell>USN</TableCell>
-          <TableCell>Branch</TableCell>
-          <TableCell>Sem</TableCell>
+          <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Branch</TableCell>
+          <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Sem</TableCell>
           <TableCell>Current Mentor</TableCell>
         </TableRow>
       </TableHead>
@@ -109,12 +113,12 @@ const StudentTable = ({ students, selectedStudents, onSelectStudent, theme, isLi
                   <span>{getProfileData(student, 'usn')}</span>
                 </Tooltip>
               </TableCell>
-              <TableCell>
+              <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
                 <Tooltip title={getProfileData(student, 'department') === 'N/A' ? 'Branch not available' : ''}>
                   <span>{getProfileData(student, 'department')}</span>
                 </Tooltip>
               </TableCell>
-              <TableCell>
+              <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
                 <Tooltip title={getProfileData(student, 'sem') === 'N/A' ? 'Semester not available' : ''}>
                   <span>{getProfileData(student, 'sem')}</span>
                 </Tooltip>
@@ -137,7 +141,7 @@ const StudentTable = ({ students, selectedStudents, onSelectStudent, theme, isLi
                   />
                 ) : (
                   <Chip 
-                    label="Not Assigned" 
+                    label={isMobile ? "Unassigned" : "Not Assigned"}
                     size="small"
                     sx={{
                       backgroundColor: isLight 

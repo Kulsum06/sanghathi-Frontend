@@ -1,8 +1,6 @@
-import { capitalCase } from "change-case";
-import { AuthContext } from "../../context/AuthContext";
-import { useState, useContext, useEffect } from "react";
 // @mui
-import { Container, Tab, Box, Tabs, useTheme } from "@mui/material";
+import { Container, Tab, Box, Tabs, Paper, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
 import { useLocation } from "react-router-dom";
 // routes
 
@@ -12,16 +10,12 @@ import useTabs from "../../hooks/useTabs";
 // components
 import Page from "../../components/Page";
 import Iconify from "../../components/Iconify";
-import HeaderBreadcrumbs from "../../components/HeaderBreadcrumbs";
 // sections
-
-import React from "react";
 import StudentDetailsForm from "./StudentDetailsForm";
 import AdmissionDetails from "./AdmissionDetails";
 import LocalGuardianForm from "./LocalGuardianForm";
 import ParentsDetails from "./ParentsDetails";
 import ContactDetails from "./ContactDetails";
-import Academic from "./Academic";
 import PrevAcademic from "./PrevAcademic";
 
 // ----------------------------------------------------------------------
@@ -78,37 +72,84 @@ export default function StudentProfile() {
 
   return (
     <Page title="Student Profile">
-      <Container maxWidth="lg">
-        <Tabs
-          allowScrollButtonsMobile
-          variant="scrollable"
-          scrollButtons="auto"
-          value={currentTab}
-          onChange={onChangeTab}
+      <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2, sm: 3 } }}>
+        <Paper
+          elevation={0}
           sx={{
-            '& .MuiTab-root': {
-              color: isLight ? theme.palette.text.secondary : theme.palette.text.primary,
-              '&.Mui-selected': {
-                color: isLight ? theme.palette.primary.main : theme.palette.info.main
-              }
-            },
-            '& .MuiTabs-indicator': {
-              backgroundColor: isLight ? theme.palette.primary.main : theme.palette.info.main
-            }
+            p: { xs: 2, sm: 3 },
+            mb: 3,
+            borderRadius: 2,
+            backgroundColor: isLight
+              ? 'rgba(255, 255, 255, 0.8)'
+              : alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(8px)',
+            boxShadow: isLight
+              ? '0 8px 32px 0 rgba(31, 38, 135, 0.15)'
+              : '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
           }}
         >
-          {ACCOUNT_TABS.map((tab) => (
-            <Tab
-              disableRipple
-              key={tab.value}
-              label={tab.value}
-              icon={tab.icon}
-              value={tab.value}
-            />
-          ))}
-        </Tabs>
+          <Box sx={{ textAlign: 'center', mb: 2 }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 'bold',
+                fontSize: { xs: '1.35rem', sm: '1.5rem' },
+                background: isLight
+                  ? `-webkit-linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
+                  : `-webkit-linear-gradient(45deg, ${theme.palette.info.main}, ${theme.palette.info.dark})`,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: 0.5,
+              }}
+            >
+              Student Profile
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Manage personal, admission, family, contact, and academic details.
+            </Typography>
+          </Box>
 
-        <Box sx={{ mb: 5 }} />
+          <Tabs
+            allowScrollButtonsMobile
+            variant="scrollable"
+            scrollButtons="auto"
+            value={currentTab}
+            onChange={onChangeTab}
+            textColor="inherit"
+            sx={{
+              '& .MuiTab-root': {
+                minHeight: 48,
+                px: { xs: 1.5, sm: 3 },
+                mx: 0.5,
+                borderRadius: '8px 8px 0 0',
+                color: isLight ? theme.palette.text.secondary : theme.palette.text.primary,
+                '&.Mui-selected': {
+                  color: isLight ? theme.palette.primary.main : theme.palette.info.main,
+                  backgroundColor: alpha(
+                    isLight ? theme.palette.primary.main : theme.palette.info.main,
+                    isLight ? 0.1 : 0.2
+                  ),
+                  fontWeight: 'bold',
+                },
+              },
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+                backgroundColor: isLight ? theme.palette.primary.main : theme.palette.info.main,
+              },
+            }}
+          >
+            {ACCOUNT_TABS.map((tab) => (
+              <Tab
+                disableRipple
+                key={tab.value}
+                label={tab.value}
+                icon={tab.icon}
+                value={tab.value}
+              />
+            ))}
+          </Tabs>
+        </Paper>
 
         {ACCOUNT_TABS.map((tab) => {
           const isMatched = tab.value === currentTab;

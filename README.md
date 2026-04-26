@@ -1,114 +1,93 @@
-# Sanghathi
+# Sanghathi Frontend
 
-This platform provides comprehensive tools for educators, mentors, and mentees as part of the digital education ecosystem.
+![Sanghathi App Logo](public/logo.jpeg)
+
+Sanghathi Frontend is the user interface layer of the Sanghathi mentoring platform. It enables admins, faculty, mentors, and students to collaborate through one system for academic tracking, communication, and guidance workflows.
+
+## Project Report
+
+### 1. Project Title
+
+Sanghathi: AI-Powered Mentoring Tool (Frontend Module)
+
+### 2. Abstract
+
+This project delivers a role-based web interface for mentoring operations in educational institutions. The frontend is built with React and Vite, and it connects to backend services for authentication, student lifecycle data, reporting, uploads, notifications, and chat. The objective is to provide a unified, user-friendly platform that improves mentor-mentee coordination and academic monitoring.
+
+### 3. Problem Statement
+
+Mentoring and student performance processes are often distributed across spreadsheets, chats, and manual records. This creates delays, data inconsistency, and low visibility for stakeholders. Sanghathi solves this by centralizing workflows into one dashboard-driven application.
+
+### 4. Objectives
+
+- Build secure role-based access and navigation.
+- Provide structured forms for student and academic data.
+- Support mentor-mentee engagement through communication tools.
+- Enable score tracking for IAT, TYL, attendance, and other outcomes.
+- Offer responsive and maintainable UI architecture for scale.
+
+### 5. Scope
+
+- Authentication and protected routes.
+- Admin and department-level dashboards.
+- Student profile and semester data modules.
+- Chat, meetings, and notifications.
+- Reports and score visualization.
+- Bulk upload user journeys integrated with backend APIs.
 
 ## Technology Stack
 
-- React (v17+)
-- Material-UI (v5)
+- React
 - Vite
-- Redux
-- Zod
-- Next JS
+- Material UI
+- Emotion
+- React Router DOM
+- React Hook Form
+- Yup
+- Socket.IO client
+- Notistack
+- Framer Motion
+- FullCalendar
+- Google Generative AI
+- Vitest
+- Testing Library
 
-## Features
+## Core Modules
 
-1. **Authentication**: User authentication using JSON Web Tokens (JWT).
-2. **Authorization**: Role-based access control for Mentor, Mentee, HoDs, and Admin.
-3. **Admin Dashboard**: User management, mentor allocation, and reallocation.
-4. **Chat**: Real-time communication between assigned mentors and mentees.5. **Info Bot**: A chatbot trained on college datasets to assist users.
-5. **Student Profile / Career Management**: Record-keeping for historical use cases and performance evaluation. Stores both personal and semester-wise data (attendance, marks, etc.).
-6. **Approval System**: Students submit or edit data, assigned mentors receive notifications and approve the data (2-level data confirmation).
-7. **Report Generation**: HoDs can generate reports based on various data views, such as semester-wise data, students with the highest marks in a semester, and parent-teacher meeting records.
+1. **Authentication and routing**: JWT-based sign-in, sign-up, forgot-password, and protected role routes.
+2. **Role-based dashboards**: Admin, faculty, student, HOD, director, placement, feedback, complaint, and career-review dashboards.
+3. **Student data management**: Admission, profile, academics, attendance, guardian, and contact workflows.
+4. **Mentor workflows**: Mentor allocation, mentee tracking, and mentorship-linked records.
+5. **Communication**: Real-time chat and meeting workflows.
+6. **Academic reporting**: IAT, TYL, external marks, attendance, MOOC, and mini-project tracking.
+7. **User feedback and alerts**: Snackbar-based notifications and UX feedback flows.
+8. **AI assistant**: Gemini-backed assistant integration for guided interactions.
 
-## Prerequisites
+## Project Outcome
 
-- Node.js (version 14.x or higher)
+The Sanghathi Frontend provides an organized, role-aware experience that reduces manual overhead and improves data visibility across mentoring teams. It serves as the interaction layer for daily institutional mentoring operations.
 
-## Getting Started
+## Contributors
 
-### 1. Clone the repository
+- shovan-mondal
+- SUJAY-HK
+- Kulsum06
+- Sai-Emani25
+- monu564100
+- vsuryacharan
+- advitha24
+- Kethanvr
 
-````bash
-git clone https://github.com/Sanghathi/sanghathi-Frontend.git
-<<<<<<< HEAD
-cd cmrit-mentoring-tool-frontend
-=======
-cd sanghathi
->>>>>>> 8bbf7ba4e3c11d62e98232879fe2c994e6169013
+See [contribute.md](contribute.md) for contribution standards.
 
-````
+## Doubts or Support
 
-### 2. Install dependencies
+If you have any doubt about setup, modules, or usage:
 
-````bash
-yarn install
-````
-
-### 3. Configure environment variables
-
-Create a `.env` file in the project root directory with the following variables:
-
-`VITE_API_URL=<your_api_base_url>/api`
-`VITE_SOCKET_URL=ws://<your_api_base_url>`
-`BASE_URL=https://<your_api_base_url>`
-`VITE_PYTHON_API=<your_api_base_url>`
-
-VITE_CLOUDINARY_CLOUD_NAME=<ClOUD_NAME>
-VITE_PYTHON_API=<VITE_PYTHON_API>
-
-Replace `<your_api_base_url>` with the base URL of your backend server.
-
-### 4. Start the development server
-
-````bash
-yarn run dev
-````
-
-This will start the frontend development server.
-
-### 5. Open the application
-
-Open your browser and navigate to `http://localhost:3000` to view the application.
-
-## Building for Production
-
-To create a production build, run the following command:
-
-````bash
-yarn build
-````
-or
-
-````bash
-npm run build
-````
-
-After the build is completed, you can serve the production build using:
-
-````bash
-yarn serve
-````
-
-This will start the production server, and you can access the application on `http://localhost:5000`.
-
-To deploy the changes to server use:
-
-````bash
-netlify deploy --prod
-````
-
-Incase of error: 'The term netlify is not recodnized' run the following command:
-
-````bash
-npm install netlify-cli -g
-````
-
-
-## Contributing
-
-Contributions are welcome! Please read our [contributing guidelines](CONTRIBUTING.md) to get started.
+1. Open an issue in this repository with the title prefix `Question:`.
+2. Include screenshots and your exact error message.
+3. Mention your role flow (Admin/Faculty/Student) for faster help.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE)
+This project is licensed under the [MIT License](LICENSE).

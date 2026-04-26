@@ -9,6 +9,7 @@ import { List } from "@mui/material";
 
 import ChatConversationItem from "./ChatConversationItem";
 
+import logger from "../../utils/logger.js";
 // ----------------------------------------------------------------------
 
 ChatConversationList.propTypes = {
@@ -58,7 +59,7 @@ export default function ChatConversationList({
     joinChat(conversation);
     // }
     // navigate(PATH_DASHBOARD.chat.view(conversationKey));
-    console.log("Conversation was clicked");
+    logger.info("Conversation was clicked");
   };
 
   const loading = !conversations.length;

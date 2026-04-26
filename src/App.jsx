@@ -1,63 +1,59 @@
-import { Route, Routes, Navigate } from "react-router-dom";
-import { useContext, useEffect } from "react";
+import { Route, Routes, Navigate, useLocation } from "react-router-dom";
+import { useContext, useEffect, lazy } from "react";
+import { Box } from "@mui/material";
 import ThemeProvider from "./theme";
 import LazyLoadWrapper from "./components/loader/LazyLoadWrapper";
-import Signup from "./pages/Users/Signup";
-import Dashboard from "./pages/Dashboard";
+import GlobalTopLoader from "./components/loader/GlobalTopLoader";
 import ProtectedRouteWrapper from "./ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
-import MeetingCalendar from "./pages/Meeting/MeetingCalendar";
-import Chat from "./pages/Chat";
-import Login from "./pages/Login";
-import User from "./pages/Users/User";
-import StudentProfile from "./pages/Student/StudentProfile";
 import MotionLazyContainer from "./components/animate/MotionLazyContainer";
 import NotistackProvider from "./components/NotistackProvider";
 import { AuthContext } from "./context/AuthContext";
-import MentorAllocation from "./pages/MentorAllocation/MentorAllocation";
-import CampusBuddy from "./pages/CampusBuddy/CampusBuddy";
-import Academic from "./pages/Student/Academic";
-import AdmissionDetails from "./pages/Student/AdmissionDetails";
-import AdmissionDetailsPage from "./pages/Student/AdmissionDetailsPage";
-import Placement from "./pages/Placement/Placement";
-import Ptm from "./pages/ParentsTeacherMeeting/Ptm";
-import Attendance from "./pages/Student/Attendance";
-import Thread from "./pages/Thread/Thread";
-import ThreadWindow from "./pages/Thread/ThreadWindow";
-import Report from "./pages/Report/Report";
-import AdminDashboard from "./pages/Admin/AdminDashboard";
-import DirectorDashboard from "./pages/Director/DirectorDashboard";
-import DirectorViewMentors from "./pages/Director/DirectorViewMentors";
-import DirectorMenteesList from "./pages/Director/DirectorMenteesList";
-import HodDashboard from "./pages/Hod/HodDashboard";
-import HodViewMentors from "./pages/Hod/HodViewMentors";
-import HodMenteesList from "./pages/Hod/HodMenteesList";
-import HodMentorDashboard from "./pages/Hod/HodMentorDashboard";
-import ViewUsers from "./pages/Admin/ViewUsers";
-import Data from "./pages/Admin/Data";
-import FacultyDashboard from "./pages/Faculty/FacultyDashboard";
-import MentorAssignmentDialog from "./pages/MentorAllocation/MentorAssignmentDialog";
-import MentorSuggestionMenu from "./pages/MentorAllocation/MentorSuggestionMenu";
-import CareerReview from "./pages/CareerReview/CareerReview";
-import ScoreCard from "./pages/Scorecard/ScoreCard";
-import POAttainmentGrading from "./pages/MenteePOAttainment/POAttainmentGrading";
-import StudentProfileOnly from "./pages/Student/StudentProfileOnly";
-import FacultyProfile from "./pages/Faculty/FacultyProfile";
-import FacultyProfileInfo from "./pages/Faculty/FacultyProfileInfo";
-import FetchStudentProfile from "./pages/Faculty/FetchStudentProfile";
-import StudentDashboard from "./pages/Faculty/StudentDashboard";
-import Settings from "./pages/Settings/Settings";
-import TYLScorecard from "./pages/Student/TYLScorecard";
-import MentorMenteeConversation from "./pages/MentorMentee/MentorMenteeConversation";
-import MyChatBot from "./mychatbot";
-import { useLocation } from 'react-router-dom';
 import { initGA, trackPageView } from "./ga";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword   from "./pages/ResetPassword";
-import FeedbackForm from "./pages/Feedback/feedback";
+import Footer from "./components/Footer";
 
-import FeedbackTable from "./pages/Feedback/feedback";
-// TODO : Need to remove routing logic from app component
+const Signup = lazy(() => import("./pages/Users/Signup"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const MeetingCalendar = lazy(() => import("./pages/Meeting/MeetingCalendar"));
+const Login = lazy(() => import("./pages/Login"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const User = lazy(() => import("./pages/Users/User"));
+const StudentProfile = lazy(() => import("./pages/Student/StudentProfile"));
+const MentorAllocation = lazy(() => import("./pages/MentorAllocation/MentorAllocation"));
+const Academic = lazy(() => import("./pages/Student/Academic"));
+const AdmissionDetailsPage = lazy(() => import("./pages/Student/AdmissionDetailsPage"));
+const Placement = lazy(() => import("./pages/Placement/Placement"));
+const Ptm = lazy(() => import("./pages/ParentsTeacherMeeting/Ptm"));
+const Attendance = lazy(() => import("./pages/Student/Attendance"));
+const Thread = lazy(() => import("./pages/Thread/Thread"));
+const ThreadWindow = lazy(() => import("./pages/Thread/ThreadWindow"));
+const Report = lazy(() => import("./pages/Report/Report"));
+const AdminDashboard = lazy(() => import("./pages/Admin/AdminDashboard"));
+const DirectorDashboard = lazy(() => import("./pages/Director/DirectorDashboard"));
+const DirectorViewMentors = lazy(() => import("./pages/Director/DirectorViewMentors"));
+const DirectorMenteesList = lazy(() => import("./pages/Director/DirectorMenteesList"));
+const HodDashboard = lazy(() => import("./pages/Hod/HodDashboard"));
+const ViewUsers = lazy(() => import("./pages/Admin/ViewUsers"));
+const Data = lazy(() => import("./pages/Admin/Data"));
+const UploadHistory = lazy(() => import("./pages/Admin/UploadHistory"));
+const FacultyDashboard = lazy(() => import("./pages/Faculty/FacultyDashboard"));
+const CareerReview = lazy(() => import("./pages/CareerReview/CareerReview"));
+const ScoreCard = lazy(() => import("./pages/Scorecard/ScoreCard"));
+const POAttainmentGrading = lazy(() => import("./pages/MenteePOAttainment/POAttainmentGrading"));
+const StudentProfileOnly = lazy(() => import("./pages/Student/StudentProfileOnly"));
+const FacultyProfile = lazy(() => import("./pages/Faculty/FacultyProfile"));
+const FacultyProfileInfo = lazy(() => import("./pages/Faculty/FacultyProfileInfo"));
+const FetchStudentProfile = lazy(() => import("./pages/Faculty/FetchStudentProfile"));
+const StudentDashboard = lazy(() => import("./pages/Faculty/StudentDashboard"));
+const Settings = lazy(() => import("./pages/Settings/Settings"));
+const TYLScorecard = lazy(() => import("./pages/Student/TYLScorecard"));
+const MentorMenteeConversation = lazy(() => import("./pages/MentorMentee/MentorMenteeConversation"));
+const MyChatBot = lazy(() => import("./mychatbot"));
+const AboutDevelopers = lazy(() => import("./pages/AboutDevelopers"));
+const DeveloperProfile = lazy(() => import("./pages/DeveloperProfile"));
+const Updates = lazy(() => import("./pages/Updates"));
+
 function App() {
   // Track page views on route change using Google Analytics GA4
   const location = useLocation();
@@ -70,20 +66,52 @@ function App() {
     trackPageView(location.pathname + location.search); // Track page changes
   }, [location]);
 
+  const globalFooterPrefixes = [
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password",
+    "/resetPassword",
+  ];
+
+  const shouldRenderGlobalFooter = globalFooterPrefixes.some(
+    (prefix) =>
+      location.pathname === prefix || location.pathname.startsWith(`${prefix}/`)
+  );
+
 
   const { user } = useContext(AuthContext);
   return (
     <ThemeProvider>
+      <GlobalTopLoader />
       <NotistackProvider>
         <MotionLazyContainer>
-          <div className="app">
-            <main className="content">
+          <Box
+            sx={{
+              minHeight: "100vh",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Box
+              component="main"
+              sx={{
+                flexGrow: 1,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
               <Routes>
                 <Route
                   path="/login"
-                  element={user ? <Navigate replace to="/" /> : <Login />}
+                  element={
+                    user ? <Navigate replace to="/" /> : <LazyLoadWrapper component={Login} />
+                  }
                 />
-                <Route path="/signup" element={<Signup />} />
+                <Route path="/forgot-password" element={<LazyLoadWrapper component={ForgotPassword} />} />
+                <Route path="/reset-password/:token" element={<LazyLoadWrapper component={ResetPassword} />} />
+                <Route path="/resetPassword/:token" element={<LazyLoadWrapper component={ResetPassword} />} />
+                <Route path="/signup" element={<LazyLoadWrapper component={Signup} />} />
 
                 <Route element={<DashboardLayout />}>
                   <Route
@@ -174,9 +202,25 @@ function App() {
                     }
                   />
                   <Route
+                    path="/hod/mentor/:mentorId/mentees"
+                    element={
+                      <ProtectedRouteWrapper allowedRoles={["hod"]}>
+                        <LazyLoadWrapper component={DirectorMenteesList} />
+                      </ProtectedRouteWrapper>
+                    }
+                  />
+                  <Route
                     path="/director/mentee-profile/:menteeId"
                     element={
                       <ProtectedRouteWrapper allowedRoles={["director","hod"]}>
+                        <LazyLoadWrapper component={StudentDashboard} />
+                      </ProtectedRouteWrapper>
+                    }
+                  />
+                  <Route
+                    path="/hod/mentee-profile/:menteeId"
+                    element={
+                      <ProtectedRouteWrapper allowedRoles={["hod"]}>
                         <LazyLoadWrapper component={StudentDashboard} />
                       </ProtectedRouteWrapper>
                     }
@@ -221,14 +265,14 @@ function App() {
                       </ProtectedRouteWrapper>
                     }
                   />
-                  {/* <Route
-                    path="/chat"
+                  <Route
+                    path="/admin/upload-history"
                     element={
-                      <ProtectedRouteWrapper>
-                        <LazyLoadWrapper component={Chat} />
+                      <ProtectedRouteWrapper allowedRoles={["admin"]}>
+                        <LazyLoadWrapper component={UploadHistory} />
                       </ProtectedRouteWrapper>
                     }
-                  /> */}
+                  />
                   <Route
                     path="/meetings"
                     element={
@@ -262,13 +306,14 @@ function App() {
                     }
                   />
                   <Route
-                    path="/Placement/Placement"
+                    path="/placement"
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={Placement} />
                       </ProtectedRouteWrapper>
                     }
                   />
+                  <Route path="/Placement/Placement" element={<Navigate replace to="/placement" />} />
 
                   <Route
                     path="/mentees"
@@ -313,21 +358,24 @@ function App() {
                     }
                   />
                   <Route
-                    path="/CareerReview/CareerReview"
+                    path="/career-review"
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={CareerReview} />
                       </ProtectedRouteWrapper>
                     }
                   />
+                  <Route path="/CareerReview/CareerReview" element={<Navigate replace to="/career-review" />} />
                   <Route
-                    path="/scorecard/ScoreCard"
+                    path="/scorecard"
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={ScoreCard} />
                       </ProtectedRouteWrapper>
                     }
                   />
+                  <Route path="/scorecard/ScoreCard" element={<Navigate replace to="/scorecard" />} />
+                  <Route path="/Scorecard/ScoreCard" element={<Navigate replace to="/scorecard" />} />
                   <Route
                     path="/po-attainment-grading"
                     element={
@@ -361,26 +409,36 @@ function App() {
                     }
                   />
                   <Route
-                    path="/student/StudentProfileOnly"
+                    path="/student/profile-only"
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={StudentProfileOnly} />
                       </ProtectedRouteWrapper>
                     }
                   />
+                  <Route path="/student/StudentProfileOnly" element={<Navigate replace to="/student/profile-only" />} />
                   <Route
-                    path="/faculty/FacultyProfile"
+                    path="/faculty/profile"
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={FacultyProfile} />
                       </ProtectedRouteWrapper>
                     }
                   />
+                  <Route path="/faculty/FacultyProfile" element={<Navigate replace to="/faculty/profile" />} />
                   <Route
                     path="/settings"
                     element={
                       <ProtectedRouteWrapper>
                         <LazyLoadWrapper component={Settings} />
+                      </ProtectedRouteWrapper>
+                    }
+                  />
+                  <Route
+                    path="/updates"
+                    element={
+                      <ProtectedRouteWrapper>
+                        <LazyLoadWrapper component={Updates} />
                       </ProtectedRouteWrapper>
                     }
                   />
@@ -393,17 +451,9 @@ function App() {
                     }
                   />
                   <Route
-                    path="/faculty/dashboard"
-                    element={
-                      <ProtectedRouteWrapper allowedRoles={["faculty"]}>
-                        <LazyLoadWrapper component={FacultyDashboard} />
-                      </ProtectedRouteWrapper>
-                    }
-                  />
-                  <Route
                     path="/faculty/mentor-mentee-conversation/:menteeId"
                     element={
-                      <ProtectedRouteWrapper allowedRoles={["faculty"]}>
+                      <ProtectedRouteWrapper allowedRoles={["faculty", "hod", "director"]}>
                         <LazyLoadWrapper component={MentorMenteeConversation} />
                       </ProtectedRouteWrapper>
                     }
@@ -424,11 +474,20 @@ function App() {
                       </ProtectedRouteWrapper>
                     }
                   />
+                  <Route
+                    path="/about-developers"
+                    element={<LazyLoadWrapper component={AboutDevelopers} />}
+                  />
+                  <Route
+                    path="/about-developers/:developerId"
+                    element={<LazyLoadWrapper component={DeveloperProfile} />}
+                  />
                 </Route>
                 
               </Routes>
-            </main>
-          </div>
+              {shouldRenderGlobalFooter ? <Footer /> : null}
+            </Box>
+          </Box>
         </MotionLazyContainer>
       </NotistackProvider>
     </ThemeProvider>
