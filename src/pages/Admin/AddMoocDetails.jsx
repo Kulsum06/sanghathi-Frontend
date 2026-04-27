@@ -23,6 +23,7 @@ import api from "../../utils/axios";
 import useDraftPersistence from "../../hooks/useDraftPersistence";
 import { resolveDraftScopeId } from "../../utils/draftScope";
 import { recordAdminUploadSession } from "../../utils/uploadHistory";
+import { invalidateCacheByPrefix } from "../../hooks/useApiCache";
 import logger from "../../utils/logger.js";
 
 const AddMoocDetails = () => {
@@ -177,6 +178,8 @@ const AddMoocDetails = () => {
       errors: newErrors,
       affectedUserIds: Array.from(affectedUserIds),
     });
+
+    invalidateCacheByPrefix("/admin/upload-history");
 
     setSuccessCount(success);
     setErrorCount(errCount);

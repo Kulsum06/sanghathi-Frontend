@@ -33,7 +33,9 @@ import {
 } from "@mui/icons-material";
 import { alpha, useTheme } from "@mui/material/styles";
 import { format } from "date-fns";
-import Page from "../../components/Page";
+import { FormProvider, RHFTextField, RHFSelect } from "../../components/hook-form";
+import useApiCache from "../../hooks/useApiCache";
+import { useSearchParams } from "react-router-dom";
 import {
   listAdminUploadSessions,
   previewAdminUploadRestore,
@@ -108,9 +110,6 @@ export default function UploadHistory() {
   const theme = useTheme();
   const isLight = theme.palette.mode === "light";
 
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -122,34 +121,24 @@ export default function UploadHistory() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [tabFilter, setTabFilter] = useState("all");
 
-  const loadSessions = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const params = { limit: 100 };
-      if (sourceFilter !== "all") {
-        params.source = sourceFilter;
-      }
-      if (statusFilter !== "all") {
-        params.status = statusFilter;
-      }
-      if (tabFilter !== "all") {
-        params.tabType = tabFilter;
-      }
-
-      const { sessions: nextSessions } = await listAdminUploadSessions(params);
-      setSessions(nextSessions);
-    } catch (loadError) {
-      setError(loadError?.message || "Failed to load upload history.");
-    } finally {
-      setLoading(false);
-    }
+  const sessionsUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (sourceFilter !== "all") params.append("source", sourceFilter);
+    if (statusFilter !== "all") params.append("status", statusFilter);
+    if (tabFilter !== "all") params.append("tabType", tabFilter);
+    params.append("limit", "100");
+    return `/admin/upload-history?${params.toString()}`;
   }, [sourceFilter, statusFilter, tabFilter]);
 
-  useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+  const {
+    data: sessionsData,
+    loading: sessionsLoading,
+    error: sessionsError,
+    invalidate: invalidateSessions,
+  } = useApiCache(sessionsUrl);
+
+  const sessions = useMemo(() => sessionsData?.data?.sessions || [], [sessionsData]);
+  const error = sessionsError?.message || "";
 
   const summary = useMemo(
     () =>
@@ -219,7 +208,7 @@ export default function UploadHistory() {
     setRestoringId(session._id);
     try {
       await restoreAdminUploadSession(session._id);
-      await loadSessions();
+      invalidateSessions();
       if (previewDialogOpen) {
         closePreview();
       }
@@ -263,8 +252,8 @@ export default function UploadHistory() {
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={loadSessions}
-              disabled={loading}
+              onClick={() => invalidateSessions()}
+              disabled={sessionsLoading}
             >
               Refresh
             </Button>
@@ -338,7 +327,7 @@ export default function UploadHistory() {
             </Alert>
           )}
 
-          {loading ? (
+          {sessionsLoading ? (
             <Box sx={{ py: 8, display: "flex", justifyContent: "center" }}>
               <CircularProgress />
             </Box>

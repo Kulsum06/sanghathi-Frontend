@@ -21,6 +21,7 @@ import { alpha, useTheme } from "@mui/material/styles";
 import useDraftPersistence from "../../hooks/useDraftPersistence";
 import { resolveDraftScopeId } from "../../utils/draftScope";
 import { recordAdminUploadSession } from "../../utils/uploadHistory";
+import { invalidateCacheByPrefix } from "../../hooks/useApiCache";
 import logger from "../../utils/logger.js";
 
 
@@ -266,7 +267,6 @@ const AddMarks = () => {
             setSuccess(`Processed ${successCount} out of ${totalCount} students successfully.`);
             setError(`Failed to process ${totalCount - successCount} students. See console for details.`);
           }
-
           await recordAdminUploadSession({
             tabType: "add-external-marks",
             fileName: file?.name || "",
@@ -278,6 +278,8 @@ const AddMarks = () => {
               .map((entry) => `${entry.usn}: ${entry.message || "Unknown error"}`),
             affectedUserIds: Array.from(affectedUserIds),
           });
+
+          invalidateCacheByPrefix("/admin/upload-history");
 
           setFile(null);
           // Reset file input

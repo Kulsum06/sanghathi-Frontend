@@ -22,6 +22,16 @@ export function invalidateCache(...urls) {
   urls.forEach((url) => { if (url) cache.delete(url); });
 }
 
+/** Remove all keys that start with a specific prefix (e.g. /admin/upload-history). */
+export function invalidateCacheByPrefix(prefix) {
+  if (!prefix) return;
+  for (const key of cache.keys()) {
+    if (key.startsWith(prefix)) {
+      cache.delete(key);
+    }
+  }
+}
+
 /** Wipe the entire cache — call this on user logout. */
 export function clearAllCache() {
   cache.clear();
